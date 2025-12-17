@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>AWS Admin Panel</title>
+</head>
+<body>
+
+<h2>AWS EC2 Admin Panel</h2>
+
+{{ range . }}
+  {{ range .Instances }}
+    <div style="border:1px solid #ccc;padding:10px;margin:10px">
+      <b>ID:</b> {{ .InstanceId }} <br>
+      <b>Status:</b> {{ .State.Name }} <br><br>
+
+      <a href="/start?id={{ .InstanceId }}">▶ Start</a>
+      |
+      <a href="/stop?id={{ .InstanceId }}">⏹ Stop</a>
+    </div>
+  {{ end }}
+{{ end }}
+
+</body>
+</html>
