@@ -8,11 +8,17 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
-)	
+	"github.com/joho/godotenv"
+)
 
 var ec2Client *ec2.Client
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("Файл .env не знайдено, використовуються системні змінні")
+	}
+
 	cfg, err := config.LoadDefaultConfig(context.TODO())
 	if err != nil {
 		log.Fatal(err)

@@ -21,5 +21,12 @@
   {{ end }}
 {{ end }}
 
+{{ if not . }}
+  <p style="color: red; padding: 20px;">
+    Увага: Жодного інстансу EC2 не знайдено в регіоні eu-central-1. 
+    Перевірте налаштування в .env або консоль AWS.
+  </p>
+{{ end }}
+
 </body>
 </html>
