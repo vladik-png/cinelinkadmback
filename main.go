@@ -36,27 +36,14 @@ func main() {
 }
 
 func index(w http.ResponseWriter, r *http.Request) {
-	resp, err := ec2Client.DescribeInstances(context.TODO(), &ec2.DescribeInstancesInput{})
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
+    resp, err := ec2Client.DescribeInstances(context.TODO(), &ec2.DescribeInstancesInput{})
+    if err != nil {
+        http.Error(w, err.Error(), 500)
+        return
+    }
 
-	funcMap := template.FuncMap{
-		"uppercase": strings.ToUpper,
-	}
-
-	tmpl, err := template.New("index.html").Funcs(funcMap).ParseFiles("templates/index.html")
-	if err != nil {
-		log.Printf("Помилка парсингу шаблону: %v", err)
-		http.Error(w, "Помилка сервера", 500)
-		return
-	}
-
-	err = tmpl.Execute(w, resp.Reservations)
-	if err != nil {
-		log.Printf("Помилка виконання шаблону: %v", err)
-	}
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(resp.Reservations)
 }
 
 func startInstance(w http.ResponseWriter, r *http.Request) {
