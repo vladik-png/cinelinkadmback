@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
@@ -41,8 +42,21 @@ func index(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tmpl := template.Must(template.ParseFiles("templates/index.html"))
-	tmpl.Execute(w, resp.Reservations)
+	funcMap := template.FuncMap{
+		"uppercase": strings.ToUpper,
+	}
+
+	tmpl, err := template.New("index.html").Funcs(funcMap).ParseFiles("templates/index.html")
+	if err != nil {
+		log.Printf("Помилка парсингу шаблону: %v", err)
+		http.Error(w, "Помилка сервера", 500)
+		return
+	}
+
+	err = tmpl.Execute(w, resp.Reservations)
+	if err != nil {
+		log.Printf("Помилка виконання шаблону: %v", err)
+	}
 }
 
 func startInstance(w http.ResponseWriter, r *http.Request) {
