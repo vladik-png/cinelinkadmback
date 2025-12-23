@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"io/ioutil"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v3/disk"
 )
 
 func getInstanceID() string {
@@ -32,12 +34,24 @@ func main() {
 	for {
 		cpuP, _ := cpu.Percent(time.Second, false)
 		vMem, _ := mem.VirtualMemory()
+		d, _ := disk.Usage("/")
+
+		start := time.Now()
+		latency := int64(0)
+		client := http.Client{Timeout: 2 * time.Second}
+		respPing, err := client.Get("http://www.google.com")
+		if err == nil {
+			latency = time.Since(start).Milliseconds()
+			respPing.Body.Close()
+		}
 
 		metrics := map[string]interface{}{
 			"instance_id": myID,
 			"cpu":         MathRound(cpuP[0]),
 			"ram":         MathRound(vMem.UsedPercent),
 			"time":        time.Now().Format("15:04:05"),
+			"disk":        fmt.Sprintf("%.2f", d.UsedPercent),
+			"ping":        latency,
 		}
 
 		jsonData, _ := json.Marshal(metrics)

@@ -14,9 +14,9 @@ import (
 )
 
 var (
-	ec2Client *ec2.Client
-	latestMetrics     = make(map[string]map[string]interface{})
-	metricsMu        sync.Mutex
+	ec2Client     *ec2.Client
+	latestMetrics = make(map[string]map[string]interface{})
+	metricsMu     sync.Mutex
 )
 
 func main() {
@@ -29,43 +29,35 @@ func main() {
 	ec2Client = ec2.NewFromConfig(cfg)
 
 	http.HandleFunc("/", enableCORS(index))
-	http.HandleFunc("/info", enableCORS(getInfo))
 	http.HandleFunc("/system-metrics", enableCORS(getMetricsForFront))
-	http.HandleFunc("/start", enableCORS(startInstance))
-	http.HandleFunc("/stop", enableCORS(stopInstance))
 
 	http.HandleFunc("/report-metrics", enableCORS(receiveMetricsFromAgent))
 
-	log.Println("Master Server running on :8080")
+	http.HandleFunc("/start", enableCORS(startInstance))
+	http.HandleFunc("/stop", enableCORS(stopInstance))
+
+	log.Println("Master Server on for :8080")
 	http.ListenAndServe(":8080", nil)
 }
 
 func receiveMetricsFromAgent(w http.ResponseWriter, r *http.Request) {
 	var data map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
-		http.Error(w, err.Error(), 400)
 		return
 	}
-
 	id, _ := data["instance_id"].(string)
+	
 	metricsMu.Lock()
 	latestMetrics[id] = data
 	metricsMu.Unlock()
-
 	w.WriteHeader(http.StatusOK)
 }
 
 func getMetricsForFront(w http.ResponseWriter, r *http.Request) {
 	metricsMu.Lock()
 	defer metricsMu.Unlock()
-	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(latestMetrics)
-}
-
-func getInfo(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"region": os.Getenv("AWS_DEFAULT_REGION")})
 }
 
 func enableCORS(next http.HandlerFunc) http.HandlerFunc {
