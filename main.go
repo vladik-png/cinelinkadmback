@@ -36,8 +36,8 @@ func main() {
 	http.HandleFunc("/start", enableCORS(startInstance))
 	http.HandleFunc("/stop", enableCORS(stopInstance))
 
-	log.Println("Master Server on for :8080")
-	http.ListenAndServe(":8080", nil)
+	log.Println("Master Server on for :8082")
+	http.ListenAndServe(":8082", nil)
 }
 
 func receiveMetricsFromAgent(w http.ResponseWriter, r *http.Request) {
