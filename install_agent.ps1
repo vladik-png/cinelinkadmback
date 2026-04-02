@@ -1,43 +1,42 @@
 $currentDir = $PSScriptRoot
-
 $masterExe = Join-Path -Path $currentDir -ChildPath "master_server.exe"
 $agentExe = Join-Path -Path $currentDir -ChildPath "metrics_agent.exe"
 
 $oldTasks = @("ServerMaster", "ServerAgent", "SystemMetricsAgent", "SystemMasterServer")
 
-Write-Host "--- I'm starting installation of system monitoring ---`n" -ForegroundColor Yellow
+Write-Host "--- Installing Cinelink Monitoring ---" -ForegroundColor Yellow
 
-Write-Host " Cleaning system from old versions..." -ForegroundColor Gray
 foreach ($taskName in $oldTasks) {
     if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
         Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
-        Write-Host "  - Old task '$taskName' removed." -ForegroundColor DarkGray
     }
 }
-
 Stop-Process -Name "master_server", "metrics_agent" -Force -ErrorAction SilentlyContinue
 
-function Register-And-Start-Task($name, $path, $description) {
+function Register-And-Start($name, $path) {
     if (Test-Path $path) {
         $action = New-ScheduledTaskAction -Execute $path -WorkingDirectory $currentDir
         $trigger = New-ScheduledTaskTrigger -AtStartup
-        
         $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0
         
-        Register-ScheduledTask -Action $action -Trigger $trigger -Settings $settings -TaskName $name -Description $description -User "NT AUTHORITY\SYSTEM" -RunLevel Highest -Force
-        
-        Write-Host "Task '$name' registered successfully!" -ForegroundColor Green
-        
+        Register-ScheduledTask -Action $action -Trigger $trigger -Settings $settings -TaskName $name -User "NT AUTHORITY\SYSTEM" -RunLevel Highest -Force
         Start-ScheduledTask -TaskName $name
-        Write-Host "Task '$name' started!" -ForegroundColor Cyan
-    } else {
-        Write-Host "Error: File not found at path $path" -ForegroundColor Red
+        Write-Host "$name Started!" -ForegroundColor Green
     }
 }
 
-Register-And-Start-Task -name "ServerMaster" -path $masterExe -description "Master Monitoring Server (Cinelink)"
-Register-And-Start-Task -name "ServerAgent" -path $agentExe -description "Metrics Agent (Cinelink)"
+Register-And-Start -name "ServerMaster" -path $masterExe
+Register-And-Start -name "ServerAgent" -path $agentExe
 
-Write-Host "`nInstallation completed! Check port 8082." -ForegroundColor Cyan
-Start-Sleep -Seconds 5
-netstat -ano | findstr :8082
+Write-Host "`n Checking local port..." -ForegroundColor Yellow
+Start-Sleep -Seconds 2
+
+if (Get-NetTCPConnection -LocalPort 8082 -State Listen -ErrorAction SilentlyContinue) {
+    Write-Host " Port 8082 is active! Opening browser..." -ForegroundColor Cyan
+    Start-Process "http://127.0.0.1:8082/system-metrics"
+} else {
+    Write-Host "Master failed to start port 8082." -ForegroundColor Red
+}
+
+Write-Host "`nReady! Console will close in 10 seconds..."
+Start-Sleep -Seconds 10
