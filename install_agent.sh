@@ -1,41 +1,44 @@
-#!/bin/bash
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
-AGENT_PATH="$DIR/metrics_agent"
 
-if [ ! -f "$AGENT_PATH" ]; then
-    echo "error file metrics_agent not found in $DIR!"
-    echo "Make sure you compile the program and put it next to the script."
-    exit 1
-fi
+register_service() {
+    local name=$1
+    local binary=$2
+    local description=$3
+    local path="$DIR/$binary"
 
-chmod +x "$AGENT_PATH"
+    if [ ! -f "$path" ]; then
+        echo "Warning: File $binary not found in $DIR. Skipping..."
+        return
+    }
 
-SERVICE_FILE="/etc/systemd/system/metrics_agent.service"
+    echo "Setting up service for $name..."
+    chmod +x "$path"
 
-echo "Створення сервісу $SERVICE_FILE..."
-
-sudo bash -c "cat > $SERVICE_FILE" << EOL
+    sudo bash -c "cat > /etc/systemd/system/$name.service" << EOL
 [Unit]
-Description=System Metrics Agent
+Description=$description
 After=network.target
 
 [Service]
 Type=simple
 User=root
 WorkingDirectory=$DIR
-ExecStart=$AGENT_PATH
+ExecStart=$path
 Restart=always
-RestartSec=5
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
 EOL
 
-sudo systemctl daemon-reload
+    sudo systemctl daemon-reload
+    sudo systemctl enable "$name.service"
+    sudo systemctl restart "$name.service"
+    echo "Service $name started successfully!"
+}
 
-sudo systemctl enable metrics_agent.service
+register_service "server_master" "master_server" "Master Monitoring Server"
+register_service "server_agent" "metrics_agent" "System Metrics Agent"
 
-sudo systemctl start metrics_agent.service
-
-echo "Agent successfully added to autostart as a systemd service!"
-echo "To check the status, run: sudo systemctl status metrics_agent"
+echo -e "\n🚀 All available modules installed and running in the background!"
+echo "Check status: sudo systemctl status server_master (or server_agent)"

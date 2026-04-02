@@ -1,14 +1,11 @@
-FROM golang:1.23-alpine AS builder
-RUN apk add --no-cache git
+FROM golang:1.21-alpine AS builder
 WORKDIR /app
-COPY go.mod ./ 
+COPY go.mod go.sum ./
 RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o admin-aws .
+COPY main.go .
+RUN CGO_ENABLED=0 GOOS=linux go build -o master-server main.go
 FROM alpine:latest
-RUN apk --no-cache add ca-certificates
 WORKDIR /root/
-COPY --from=builder /app/admin-aws .
-COPY templates ./templates
-EXPOSE 8080
-CMD ["./admin-aws"]
+COPY --from=builder /app/master-server .
+EXPOSE 8082
+CMD ["./master-server"]
