@@ -47,14 +47,14 @@ func shutdownHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func collectAndSendMetrics(nodeID string) {
-	cpuP, _ := cpu.Percent(time.Second, false)
-	vMem, _ := mem.VirtualMemory()
+    cpuP, _ := cpu.Percent(time.Second, false)
+    vMem, _ := mem.VirtualMemory()
 	
-	diskPath := "/"
-	if runtime.GOOS == "windows" {
-		diskPath = "C:"
-	}
-	d, _ := disk.Usage(diskPath)
+	diskPath := "/" 
+    if runtime.GOOS == "windows" {
+        diskPath = "C:" 
+    }
+    d, _ := disk.Usage(diskPath)
 
 	start := time.Now()
 	latency := int64(0)
@@ -75,11 +75,11 @@ func collectAndSendMetrics(nodeID string) {
 	}
 
 	metrics := map[string]interface{}{
-		"instance_id": nodeID,
-		"time":        time.Now().Format("15:04:05"),
-		"cpu":         MathRound(cpuVal),
-		"ram":         MathRound(vMem.UsedPercent),
-		"disk":        fmt.Sprintf("%.2f", d.UsedPercent),
+        "instance_id": nodeID,
+        "os":          runtime.GOOS,
+        "cpu":         MathRound(cpuVal),
+        "ram":         MathRound(vMem.UsedPercent),
+        "disk":        fmt.Sprintf("%.2f", d.UsedPercent),
 		"ping":        latency,
 		"packet_loss": packetLoss,
 	}
