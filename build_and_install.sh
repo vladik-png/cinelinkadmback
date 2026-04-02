@@ -1,20 +1,12 @@
-echo -e "\e[33m Starting compilation for Linux...\e[0m"
+echo -e "\e[33m--- Starting Build & Install (Linux) ---\e[0m"
 
-go mod tidy
-
+echo "Building Master..."
 go build -o master_server main.go
-if [ $? -ne 0 ]; then
-    echo -e "\e[31m Error building main.go\e[0m"
-    exit 1
-fi
+if [ $? -ne 0 ]; then echo "Build failed for Master"; exit 1; fi
 
+echo "Building Agent..."
 go build -o metrics_agent ./agent/metrix.go
-if [ $? -ne 0 ]; then
-    echo -e "\e[31m Error compiling agent/metrix.go\e[0m"
-    exit 1
-fi
-
-echo -e "\e[32m Compilation completed successfully!\e[0m"
+if [ $? -ne 0 ]; then echo "Build failed for Agent"; exit 1; fi
 
 chmod +x install_full.sh
 sudo ./install_full.sh
