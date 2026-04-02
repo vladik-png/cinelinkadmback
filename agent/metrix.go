@@ -16,7 +16,7 @@ import (
 	"github.com/shirou/gopsutil/v3/mem"
 )
 
-const MasterServerURL = "http://E7dd0f5572ff.sn.mynetname.net:8082/report-metrics"
+const MasterServerURL = "http://127.0.0.1:8082/report-metrics"
 
 var (
 	DeviceName     string
