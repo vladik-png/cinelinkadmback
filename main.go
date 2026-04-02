@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"sync"
@@ -19,34 +20,65 @@ var (
 	metricsMu     sync.Mutex
 )
 
+
+const (
+	LocalInstanceID = "my-windows-server"
+	LocalMacAddress = "00:11:22:33:44:55"
+	LocalAgentURL   = "http://127.0.0.1:8081"
+)
+
 func main() {
 	godotenv.Load()
 	region := os.Getenv("AWS_DEFAULT_REGION")
-	if region == "" { region = "eu-north-1" }
+	if region == "" {
+		region = "eu-north-1"
+	}
 
 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
-	if err != nil { log.Fatal(err) }
-	ec2Client = ec2.NewFromConfig(cfg)
+	if err != nil {
+		log.Println("Не вдалося завантажити AWS config (працюватиме лише локальний):", err)
+	} else {
+		ec2Client = ec2.NewFromConfig(cfg)
+	}
 
 	http.HandleFunc("/", enableCORS(index))
 	http.HandleFunc("/system-metrics", enableCORS(getMetricsForFront))
-
 	http.HandleFunc("/report-metrics", enableCORS(receiveMetricsFromAgent))
-
 	http.HandleFunc("/start", enableCORS(startInstance))
 	http.HandleFunc("/stop", enableCORS(stopInstance))
 
-	log.Println("Master Server on for :8082")
+	log.Println("Master Server запущено на порту :8082")
 	http.ListenAndServe(":8082", nil)
+}
+
+// Wake-on-LAN функція
+func wakeOnLan(macAddr string) error {
+	hwAddr, err := net.ParseMAC(macAddr)
+	if err != nil {
+		return err
+	}
+	packet := make([]byte, 102)
+	copy(packet[0:6], []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
+	for i := 1; i <= 16; i++ {
+		copy(packet[i*6:i*6+6], hwAddr)
+	}
+	conn, err := net.Dial("udp", "255.255.255.255:9")
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	_, err = conn.Write(packet)
+	return err
 }
 
 func receiveMetricsFromAgent(w http.ResponseWriter, r *http.Request) {
 	var data map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	id, _ := data["instance_id"].(string)
-	
+
 	metricsMu.Lock()
 	latestMetrics[id] = data
 	metricsMu.Unlock()
@@ -65,26 +97,78 @@ func enableCORS(next http.HandlerFunc) http.HandlerFunc {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-		if r.Method == "OPTIONS" { w.WriteHeader(http.StatusOK); return }
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 		next(w, r)
 	}
 }
 
 func index(w http.ResponseWriter, r *http.Request) {
-	resp, err := ec2Client.DescribeInstances(context.TODO(), &ec2.DescribeInstancesInput{})
-	if err != nil { http.Error(w, err.Error(), 500); return }
+	instances := make([]map[string]interface{}, 0)
+
+	instances = append(instances, map[string]interface{}{
+		"InstanceId": LocalInstanceID,
+		"Provider":   "Local",
+
+	})
+
+	if ec2Client != nil {
+		resp, err := ec2Client.DescribeInstances(context.TODO(), &ec2.DescribeInstancesInput{})
+		if err == nil {
+			for _, res := range resp.Reservations {
+				for _, inst := range res.Instances {
+					instances = append(instances, map[string]interface{}{
+						"InstanceId": *inst.InstanceId,
+						"Provider":   "AWS",
+						"State":      inst.State.Name,
+					})
+				}
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp.Reservations)
+	json.NewEncoder(w).Encode(instances)
 }
 
 func startInstance(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
-	ec2Client.StartInstances(context.TODO(), &ec2.StartInstancesInput{InstanceIds: []string{id}})
+
+	if id == LocalInstanceID {
+		err := wakeOnLan(LocalMacAddress)
+		if err != nil {
+			http.Error(w, "Помилка Wake-on-LAN: "+err.Error(), 500)
+			return
+		}
+		log.Println("Відправлено WoL пакет на", LocalMacAddress)
+	} else if ec2Client != nil {
+		_, err := ec2Client.StartInstances(context.TODO(), &ec2.StartInstancesInput{InstanceIds: []string{id}})
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+	}
 	w.WriteHeader(http.StatusOK)
 }
 
 func stopInstance(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
-	ec2Client.StopInstances(context.TODO(), &ec2.StopInstancesInput{InstanceIds: []string{id}})
+
+	if id == LocalInstanceID {
+		_, err := http.Get(LocalAgentURL + "/shutdown")
+		if err != nil {
+			http.Error(w, "Не вдалося зв'язатися з агентом: "+err.Error(), 500)
+			return
+		}
+		log.Println("Команда на вимкнення відправлена на локальний сервер")
+	} else if ec2Client != nil {
+		_, err := ec2Client.StopInstances(context.TODO(), &ec2.StopInstancesInput{InstanceIds: []string{id}})
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+	}
 	w.WriteHeader(http.StatusOK)
 }

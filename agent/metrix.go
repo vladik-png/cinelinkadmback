@@ -1,48 +1,60 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-	"sync"
-	"time"
 	"os"
+	"os/exec"
+	"runtime"
+	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
 )
 
-var (
-	nodesHistory = make(map[string]map[string]interface{})
-	historyLock  sync.RWMutex
-)
+
+const MasterServerURL = "http://127.0.0.1:8082/report-metrics"
 
 func getInstanceID() string {
 	hostname, err := os.Hostname()
-    if err != nil {
-        return "my-local-pc"
-    }
-    return hostname
+	if err != nil {
+		return "my-local-pc"
+	}
+
+	if runtime.GOOS == "windows" {
+		return "my-windows-server"
+	}
+	return hostname
 }
 
 func MathRound(val float64) float64 {
 	return float64(int(val*100)) / 100
 }
 
-func systemMetricsHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	historyLock.RLock()
-	defer historyLock.RUnlock()
-	json.NewEncoder(w).Encode(nodesHistory)
+func shutdownHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("Отримано команду на вимкнення!")
+	w.WriteHeader(http.StatusOK)
+	
+	if runtime.GOOS == "windows" {
+		exec.Command("cmd", "/c", "shutdown", "/s", "/t", "0").Run()
+	} else {
+		exec.Command("sudo", "shutdown", "-h", "now").Run()
+	}
 }
 
-func updateMetrics(nodeID string) {
+func collectAndSendMetrics(nodeID string) {
 	cpuP, _ := cpu.Percent(time.Second, false)
 	vMem, _ := mem.VirtualMemory()
-	d, _ := disk.Usage("D:")
+	
+	diskPath := "/"
+	if runtime.GOOS == "windows" {
+		diskPath = "C:"
+	}
+	d, _ := disk.Usage(diskPath)
 
 	start := time.Now()
 	latency := int64(0)
@@ -57,33 +69,40 @@ func updateMetrics(nodeID string) {
 		packetLoss = "100"
 	}
 
+	cpuVal := 0.0
+	if len(cpuP) > 0 {
+		cpuVal = cpuP[0]
+	}
+
 	metrics := map[string]interface{}{
+		"instance_id": nodeID,
 		"time":        time.Now().Format("15:04:05"),
-		"cpu":         MathRound(cpuP[0]),
+		"cpu":         MathRound(cpuVal),
 		"ram":         MathRound(vMem.UsedPercent),
 		"disk":        fmt.Sprintf("%.2f", d.UsedPercent),
 		"ping":        latency,
 		"packet_loss": packetLoss,
 	}
 
-	historyLock.Lock()
-	nodesHistory[nodeID] = metrics
-	historyLock.Unlock()
+	jsonData, err := json.Marshal(metrics)
+	if err == nil {
+		http.Post(MasterServerURL, "application/json", bytes.NewBuffer(jsonData))
+	}
 }
 
 func main() {
 	nodeID := getInstanceID()
-	log.Printf("Agent started for ID: %s", nodeID)
+	log.Printf("Агент запущено. ID: %s. ОС: %s", nodeID, runtime.GOOS)
 
-	http.HandleFunc("/system-metrics", systemMetricsHandler)
+	http.HandleFunc("/shutdown", shutdownHandler)
+	
 	go func() {
-		log.Println("Server listening on :8081")
+		log.Println("Агент слухає команди на порту :8081")
 		log.Fatal(http.ListenAndServe(":8081", nil))
 	}()
 
 	for {
-		updateMetrics(nodeID)
+		collectAndSendMetrics(nodeID)
 		time.Sleep(2 * time.Second)
 	}
 }
-

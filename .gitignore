@@ -2,7 +2,7 @@
 .env.local
 dist/
 build/
-D0ckerfile
+Dockerfile
 node_modules/
 *.log
 *.lock
