@@ -36,7 +36,7 @@ func main() {
 
 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
 	if err != nil {
-		log.Println("Не вдалося завантажити AWS config (працюватиме лише локальний):", err)
+		log.Println("No AWS config found (will work only locally):", err)
 	} else {
 		ec2Client = ec2.NewFromConfig(cfg)
 	}
@@ -47,7 +47,7 @@ func main() {
 	http.HandleFunc("/start", enableCORS(startInstance))
 	http.HandleFunc("/stop", enableCORS(stopInstance))
 
-	log.Println("Master Server запущено на порту :8082")
+	log.Println("Master Server started on port :8082")
 	http.ListenAndServe(":8082", nil)
 }
 
@@ -139,10 +139,10 @@ func startInstance(w http.ResponseWriter, r *http.Request) {
 	if id == LocalInstanceID {
 		err := wakeOnLan(LocalMacAddress)
 		if err != nil {
-			http.Error(w, "Помилка Wake-on-LAN: "+err.Error(), 500)
+			http.Error(w, "Error sending Wake-on-LAN packet: "+err.Error(), 500)
 			return
 		}
-		log.Println("Відправлено WoL пакет на", LocalMacAddress)
+		log.Println("Wake-on-LAN packet sent to", LocalMacAddress)
 	} else if ec2Client != nil {
 		_, err := ec2Client.StartInstances(context.TODO(), &ec2.StartInstancesInput{InstanceIds: []string{id}})
 		if err != nil {
@@ -159,10 +159,10 @@ func stopInstance(w http.ResponseWriter, r *http.Request) {
 	if id == LocalInstanceID {
 		_, err := http.Get(LocalAgentURL + "/shutdown")
 		if err != nil {
-			http.Error(w, "Не вдалося зв'язатися з агентом: "+err.Error(), 500)
+			http.Error(w, "Failed to connect to agent: "+err.Error(), 500)
 			return
 		}
-		log.Println("Команда на вимкнення відправлена на локальний сервер")
+		log.Println("Shutdown command sent to local server")
 	} else if ec2Client != nil {
 		_, err := ec2Client.StopInstances(context.TODO(), &ec2.StopInstancesInput{InstanceIds: []string{id}})
 		if err != nil {
