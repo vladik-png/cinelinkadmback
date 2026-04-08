@@ -16,7 +16,7 @@ import (
 	"github.com/shirou/gopsutil/v3/mem"
 )
 
-const MasterServerURL = "http://127.0.0.1:8082/report-metrics"
+const MasterServerURL = "http://127.0.0.1:8080/report-metrics"
 
 var (
 	DeviceName     string
@@ -57,7 +57,7 @@ func initStaticInfo() {
 }
 
 func getInstanceID() string {
-	return DeviceName
+	return "my-windows-server" 
 }
 
 func MathRound(val float64) float64 {
@@ -110,7 +110,7 @@ func collectAndSendMetrics(nodeID string) {
 		"public_ip":   PublicIP,
 		"os":          runtime.GOOS,
 		"time":        time.Now().Format("15:04:05"),
-		"cpu":         MathRound(cpuVal),
+		"cpu_usage":   MathRound(cpuVal),
 		"ram":         MathRound(vMem.UsedPercent),
 		"disk":        fmt.Sprintf("%.2f", d.UsedPercent),
 		"ping":        latency,
@@ -128,7 +128,7 @@ func main() {
 	initStaticInfo()
 
 	nodeID := getInstanceID()
-	log.Printf("Agent started. Device: %s. Location: %s. OS: %s", DeviceName, ServerLocation, runtime.GOOS)
+	log.Printf("Agent started. Instance ID: %s. OS: %s", nodeID, runtime.GOOS)
 
 	http.HandleFunc("/shutdown", shutdownHandler)
 

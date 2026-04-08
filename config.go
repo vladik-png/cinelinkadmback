@@ -12,7 +12,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-	type ServerConfig struct {
+type ServerConfig struct {
 	ID         string
 	Provider   string
 	Platform   string
@@ -30,30 +30,43 @@ var (
 	ec2Client     *ec2.Client
 	latestMetrics = make(map[string]ServerState)
 	metricsMu     sync.Mutex
+	serversList   map[string]ServerConfig
+)
+
+func getEnv(key, fallback string) string {
+	if value, exists := os.LookupEnv(key); exists && value != "" {
+		return value
+	}
+	return fallback
+}
+
+func initConfig() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("File .env not found, using default values.")
+	}
 
 	serversList = map[string]ServerConfig{
 		"my-windows-server": {
 			ID:         "my-windows-server",
 			Provider:   "Local",
 			Platform:   "Windows",
-			MacAddress: "00:25:90:9A:4A:C0",
-			AgentURL:   "http://127.0.0.1:8081",
-			WoLTargets: []string{"e7dd0f5572ff.sn.mynetname.net:9", "255.255.255.255:9"},
+			MacAddress: getEnv("WINDOWS_MAC", "00:25:90:9A:4A:C0"),
+			AgentURL:   getEnv("WINDOWS_AGENT_URL", "http://127.0.0.1:8081"),
+			WoLTargets: []string{
+				getEnv("WINDOWS_WOL_DOMAIN", "e7dd0f5572ff.sn.mynetname.net:9"),
+				getEnv("WINDOWS_WOL_LOCAL", "255.255.255.255:9"),
+			},
 		},
 	}
-)
+	log.Println("Configuration loaded successfully")
 
-func initConfig() {
-	godotenv.Load()
-	region := os.Getenv("AWS_DEFAULT_REGION")
-	if region == "" {
-		region = "eu-north-1"
-	}
+	region := getEnv("AWS_DEFAULT_REGION", "eu-north-1")
 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
 	if err != nil {
-		log.Println("AWS config not found (Local Mode Only)")
+		log.Println("AWS configuration not found (only local mode will work):", err)
 	} else {
 		ec2Client = ec2.NewFromConfig(cfg)
-		log.Println("AWS EC2 Client initialized")
+		log.Println("AWS EC2 client initialized successfully")
 	}
 }

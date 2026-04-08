@@ -36,7 +36,7 @@ func initDB() {
 	}
 
 	db.AutoMigrate(&ServerLog{}, &ServerAlert{})
-	log.Println("🗄️ Database initialized successfully")
+	log.Println("Database initialized successfully")
 }
 
 func logEvent(serverID, action, status, details string) {
@@ -61,6 +61,6 @@ func createAlert(serverID, alertType, message string) {
 			Message:  message,
 		}
 		db.Create(&alert)
-		log.Printf("🚨 ALERT [%s]: %s - %s\n", alertType, serverID, message)
+		log.Printf("ALERT [%s]: %s - %s\n", alertType, serverID, message)
 	}
 }
