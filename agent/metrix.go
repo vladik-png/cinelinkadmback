@@ -11,18 +11,27 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
 )
 
-const MasterServerURL = "http://127.0.0.1:8080/report-metrics"
-
 var (
 	DeviceName     string
 	ServerLocation string
 	PublicIP       string
+	MasterURL      string
+	InstanceID     string
+	AgentPort      string
 )
+
+func getEnv(key, fallback string) string {
+	if value, exists := os.LookupEnv(key); exists && value != "" {
+		return value
+	}
+	return fallback
+}
 
 func initStaticInfo() {
 	host, err := os.Hostname()
@@ -56,16 +65,12 @@ func initStaticInfo() {
 	}
 }
 
-func getInstanceID() string {
-	return "my-windows-server" 
-}
-
 func MathRound(val float64) float64 {
 	return float64(int(val*100)) / 100
 }
 
 func shutdownHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println("Received shutdown command!")
+	log.Println("Received shutdown command. Shutting down the server...")
 	w.WriteHeader(http.StatusOK)
 
 	if runtime.GOOS == "windows" {
@@ -75,7 +80,7 @@ func shutdownHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func collectAndSendMetrics(nodeID string) {
+func collectAndSendMetrics() {
 	cpuP, _ := cpu.Percent(time.Second, false)
 	vMem, _ := mem.VirtualMemory()
 
@@ -104,7 +109,7 @@ func collectAndSendMetrics(nodeID string) {
 	}
 
 	metrics := map[string]interface{}{
-		"instance_id": nodeID,
+		"instance_id": InstanceID,
 		"device_name": DeviceName,
 		"location":    ServerLocation,
 		"public_ip":   PublicIP,
@@ -119,26 +124,30 @@ func collectAndSendMetrics(nodeID string) {
 
 	jsonData, err := json.Marshal(metrics)
 	if err == nil {
-		http.Post(MasterServerURL, "application/json", bytes.NewBuffer(jsonData))
+		http.Post(MasterURL, "application/json", bytes.NewBuffer(jsonData))
 	}
 }
 
 func main() {
 	log.Println("Initializing agent...")
-	initStaticInfo()
+	godotenv.Load()
 
-	nodeID := getInstanceID()
-	log.Printf("Agent started. Instance ID: %s. OS: %s", nodeID, runtime.GOOS)
+	MasterURL = getEnv("MASTER_URL", "http://127.0.0.1:8080/report-metrics")
+	InstanceID = getEnv("INSTANCE_ID", "my-windows-server")
+	AgentPort = getEnv("AGENT_PORT", "8081")
+
+	initStaticInfo()
+	log.Printf("Agent ID: %s. Sending to: %s", InstanceID, MasterURL)
 
 	http.HandleFunc("/shutdown", shutdownHandler)
 
 	go func() {
-		log.Println("Agent listening for commands on local port :8081")
-		log.Fatal(http.ListenAndServe(":8081", nil))
+		log.Printf("Agent listening for commands on port :%s", AgentPort)
+		log.Fatal(http.ListenAndServe(":"+AgentPort, nil))
 	}()
 
 	for {
-		collectAndSendMetrics(nodeID)
+		collectAndSendMetrics()
 		time.Sleep(2 * time.Second)
 	}
 }
