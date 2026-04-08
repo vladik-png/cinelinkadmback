@@ -13,12 +13,12 @@ echo  #                Build ^& Install Utility                 #
 echo  #                                                        #
 echo  ##########################################################
 echo.
-echo   [1] Встановити / Оновити (Install / Update)
-echo   [2] Полагодити (Repair - Видалити і поставити з нуля)
-echo   [3] Видалити повністю (Uninstall)
-echo   [4] Вихід
+echo   [1] Install / Update
+echo   [2] Repair / Reinstall
+echo   [3] Uninstall
+echo   [4] Exit
 echo.
-set /p choice=" Оберіть дію [1-4]: "
+set /p choice=" Choose an action [1-4]: "
 
 if "%choice%"=="1" goto install
 if "%choice%"=="2" goto repair
@@ -28,7 +28,7 @@ goto menu
 
 :uninstall
 echo.
-echo  [🗑️] Починаємо повне очищення системи...
+echo  [] Removing Cinelink components...
 taskkill /F /IM master_server.exe /T >nul 2>&1
 taskkill /F /IM metrics_agent.exe /T >nul 2>&1
 
@@ -41,7 +41,7 @@ powershell -Command "Remove-NetFirewallRule -DisplayName 'Cinelink WoL (UDP)' -E
 
 if exist "master_server.exe" del /f /q "master_server.exe"
 if exist "metrics_agent.exe" del /f /q "metrics_agent.exe"
-echo  [+] Cinelink успішно видалено з системи!
+echo  [+] Cinelink components removed successfully!
 pause
 goto menu
 
@@ -78,7 +78,7 @@ goto menu
 
 :repair
 echo.
-echo  [🔧] Починаємо ремонт (Repair)...
+echo  [] Start Repair...
 call :uninstall
 call :install
 goto menu

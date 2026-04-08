@@ -106,10 +106,10 @@ while true; do
     echo -e "\e[1;36m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\e[0m"
     echo -e "\e[1;36m┃            CINELINK LINUX DEPLOYMENT ENGINE               ┃\e[0m"
     echo -e "\e[1;36m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\e[0m"
-    echo -e "  \e[1;32m[1]\e[0m Install / Update (Встановити / Оновити)"
-    echo -e "  \e[1;33m[2]\e[0m Repair (Полагодити - Видалити і поставити з нуля)"
-    echo -e "  \e[1;31m[3]\e[0m Uninstall (Видалити повністю)"
-    echo -e "  \e[1;37m[4]\e[0m Exit (Вихід)"
+    echo -e "  \e[1;32m[1]\e[0m Install / Update"
+    echo -e "  \e[1;33m[2]\e[0m Repair / Reinstall"
+    echo -e "  \e[1;31m[3]\e[0m Uninstall"
+    echo -e "  \e[1;37m[4]\e[0m Exit"
     echo -e "\e[1;36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[0m"
     read -p "  Оберіть дію [1-4]: " choice
 
