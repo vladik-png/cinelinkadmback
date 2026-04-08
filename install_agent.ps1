@@ -38,6 +38,8 @@ function Deploy-Task($name, $path, $desc) {
         Register-ScheduledTask -Action $action -Trigger $trigger -Settings $settings -TaskName $name -Description $desc -User "NT AUTHORITY\SYSTEM" -RunLevel Highest -Force | Out-Null
         Start-ScheduledTask -TaskName $name
         Write-Host "  [*] Service '$name' -> ONLINE" -ForegroundColor Green
+    } else {
+        Write-Host "  [!] ERROR: Binary '$path' not found!" -ForegroundColor Red
     }
 }
 
