@@ -19,7 +19,7 @@ func main() {
 	http.HandleFunc("/start", enableCORS(startInstance))
 	http.HandleFunc("/stop", enableCORS(stopInstance))
 
-	log.Println("🚀 Master Server started on port :8080")
+	log.Println("Master Server started on port :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
