@@ -12,9 +12,10 @@ type ServerLog struct {
 	ID        uint      `gorm:"primaryKey"`
 	CreatedAt time.Time
 	ServerID  string    `gorm:"index"`
-	Action    string
-	Status    string
-	Details   string
+	Component string    
+	Action    string    
+	Status    string    
+	Details   string    `gorm:"type:text"`
 }
 
 type ServerAlert struct {

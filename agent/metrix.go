@@ -9,12 +9,15 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
+	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/yusufpapurcu/wmi"
 )
 
 var (
@@ -26,6 +29,10 @@ var (
 	AgentPort      string
 )
 
+type Win32_Temperature struct {
+	CurrentTemperature uint32
+}
+
 func getEnv(key, fallback string) string {
 	if value, exists := os.LookupEnv(key); exists && value != "" {
 		return value
@@ -33,10 +40,28 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
-func initStaticInfo() {
-	host, err := os.Hostname()
+func sendLog(action, status, details string) {
+	logURL := strings.Replace(MasterURL, "/report-metrics", "/log-event", 1)
+	
+	payload := map[string]interface{}{
+		"instance_id": InstanceID,
+		"component":   "AGENT",
+		"action":      action,
+		"status":      status,
+		"details":     details,
+	}
+
+	jsonData, err := json.Marshal(payload)
 	if err == nil {
-		DeviceName = host
+		client := http.Client{Timeout: 3 * time.Second}
+		client.Post(logURL, "application/json", bytes.NewBuffer(jsonData))
+	}
+}
+
+func initStaticInfo() {
+	hostName, err := os.Hostname()
+	if err == nil {
+		DeviceName = hostName
 	} else {
 		DeviceName = "Unknown Device"
 	}
@@ -65,12 +90,36 @@ func initStaticInfo() {
 	}
 }
 
+func getCPUTemperature() float64 {
+	if runtime.GOOS == "windows" {
+		var dst []Win32_Temperature
+		q := "SELECT CurrentTemperature FROM MSAcpi_ThermalZoneTemperature"
+		err := wmi.Query(q, &dst)
+		if err != nil || len(dst) == 0 {
+			return 0
+		}
+		return (float64(dst[0].CurrentTemperature) - 2732.0) / 10.0
+	} else {
+		// Для Linux
+		temps, err := host.SensorsTemperatures()
+		if err == nil {
+			for _, t := range temps {
+				if strings.Contains(strings.ToLower(t.SensorKey), "cpu") || strings.Contains(strings.ToLower(t.SensorKey), "core") {
+					return t.Temperature
+				}
+			}
+		}
+	}
+	return 0
+}
+
 func MathRound(val float64) float64 {
 	return float64(int(val*100)) / 100
 }
 
 func shutdownHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println("Received shutdown command. Shutting down the server...")
+	log.Println("Received shutdown command!")
+	sendLog("SHUTDOWN", "INFO", "Shutdown command received from Master")
 	w.WriteHeader(http.StatusOK)
 
 	if runtime.GOOS == "windows" {
@@ -81,7 +130,11 @@ func shutdownHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func collectAndSendMetrics() {
-	cpuP, _ := cpu.Percent(time.Second, false)
+	cpuP, err := cpu.Percent(time.Second, false)
+	if err != nil {
+		sendLog("METRICS_ERROR", "ERROR", "Failed to get CPU percent: "+err.Error())
+	}
+	
 	vMem, _ := mem.VirtualMemory()
 
 	diskPath := "/"
@@ -116,6 +169,7 @@ func collectAndSendMetrics() {
 		"os":          runtime.GOOS,
 		"time":        time.Now().Format("15:04:05"),
 		"cpu_usage":   MathRound(cpuVal),
+		"cpu_temp":    MathRound(getCPUTemperature()),
 		"ram":         MathRound(vMem.UsedPercent),
 		"disk":        fmt.Sprintf("%.2f", d.UsedPercent),
 		"ping":        latency,
@@ -124,7 +178,12 @@ func collectAndSendMetrics() {
 
 	jsonData, err := json.Marshal(metrics)
 	if err == nil {
-		http.Post(MasterURL, "application/json", bytes.NewBuffer(jsonData))
+		resp, err := http.Post(MasterURL, "application/json", bytes.NewBuffer(jsonData))
+		if err != nil {
+			log.Println("Failed to send metrics:", err)
+		} else {
+			resp.Body.Close()
+		}
 	}
 }
 
@@ -137,6 +196,9 @@ func main() {
 	AgentPort = getEnv("AGENT_PORT", "8081")
 
 	initStaticInfo()
+	
+	sendLog("BOOT_COMPLETE", "SUCCESS", fmt.Sprintf("Agent started on %s (%s)", DeviceName, runtime.GOOS))
+
 	log.Printf("Agent ID: %s. Sending to: %s", InstanceID, MasterURL)
 
 	http.HandleFunc("/shutdown", shutdownHandler)
