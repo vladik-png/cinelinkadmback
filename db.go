@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"gorm.io/driver/sqlite"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
@@ -29,14 +29,21 @@ type ServerAlert struct {
 var db *gorm.DB
 
 func initDB() {
+
+	dsn := getEnv("DATABASE_URL", "")
+	
+	if dsn == "" {
+		log.Fatal("DATABASE_URL не знайдено у файлі .env!")
+	}
+
 	var err error
-	db, err = gorm.Open(sqlite.Open("servers.db"), &gorm.Config{})
+	db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
+		log.Fatal(" Failed to connect to NeonDB:", err)
 	}
 
 	db.AutoMigrate(&ServerLog{}, &ServerAlert{})
-	log.Println("Database initialized successfully")
+	log.Println("NeonDB (PostgreSQL) initialized successfully")
 }
 
 func logEvent(serverID, action, status, details string) {

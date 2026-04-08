@@ -14,7 +14,7 @@ draw_progress() {
 }
 
 do_uninstall() {
-    echo -e "\n\e[1;31m[🗑️] Purging legacy services & files...\e[0m"
+    echo -e "\n\e[1;31m[] Purging legacy services & files...\e[0m"
     draw_progress 1
     for svc in "${OLD_SERVICES[@]}"; do
         if systemctl list-unit-files | grep -q "$svc.service"; then
