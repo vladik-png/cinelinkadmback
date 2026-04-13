@@ -45,6 +45,7 @@ func initConfig() {
 	if err != nil {
 		log.Println("File .env not found, using default values.")
 	}
+	kamateraIP := getEnv("KAMATERA_PUBLIC_IP", "0.0.0.0")
 
 	serversList = map[string]ServerConfig{
 		"my-windows-server": {
@@ -57,6 +58,12 @@ func initConfig() {
 				getEnv("WINDOWS_WOL_DOMAIN", "e7dd0f5572ff.sn.mynetname.net:9"),
 				getEnv("WINDOWS_WOL_LOCAL", "255.255.255.255:9"),
 			},
+		},
+		"kamatera-server-01": {
+			ID:       getEnv("KAMATERA_SERVER_ID", "9f36db08-e0c9-4dfa-b2b3-d36ba11f5015"),
+			Provider: "Kamatera",
+			Platform: "Linux",
+			AgentURL: "http://" + kamateraIP + ":8082",
 		},
 	}
 	log.Println("Configuration loaded successfully")

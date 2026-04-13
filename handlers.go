@@ -3,11 +3,49 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 )
+
+func getKamateraInstances(w http.ResponseWriter, r *http.Request) {
+	clientID := getEnv("KAMATERA_CLIENT_ID", "")
+	secretKey := getEnv("KAMATERA_SECRET_KEY", "")
+
+	if clientID == "" || secretKey == "" {
+		http.Error(w, "Kamatera credentials not found", http.StatusInternalServerError)
+		return
+	}
+
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", "https://console.kamatera.com/service/server", nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	req.Header.Set("AuthClientId", clientID)
+	req.Header.Set("AuthSecret", secretKey)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "Failed to reach Kamatera API", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		http.Error(w, "Error reading response", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(body)
+}
 
 func startInstance(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
