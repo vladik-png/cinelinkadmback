@@ -1,11 +1,12 @@
 $currentDir = $PSScriptRoot
 $masterExe = Join-Path -Path $currentDir -ChildPath "master_server.exe"
 $agentExe = Join-Path -Path $currentDir -ChildPath "metrics_agent.exe"
-$oldTasks = @("ServerMaster", "ServerAgent", "SystemMetricsAgent", "SystemMasterServer")
+$terminalExe = Join-Path -Path $currentDir -ChildPath "terminal_proxy.exe"
+$oldTasks = @("ServerMaster", "ServerAgent", "ServerTerminal", "SystemMetricsAgent", "SystemMasterServer")
 
 Clear-Host
 Write-Host "----------------------------------------------------------" -ForegroundColor Gray
-Write-Host "     CINELINK INFRASTRUCTURE INSTALLER v1.0" -ForegroundColor Cyan
+Write-Host "     CINELINK INFRASTRUCTURE INSTALLER v1.1" -ForegroundColor Cyan
 Write-Host "----------------------------------------------------------" -ForegroundColor Gray
 
 Write-Host "`n[1/4] Cleaning environment..." -ForegroundColor Yellow
@@ -20,7 +21,7 @@ foreach ($taskName in $oldTasks) {
         Write-Host "  [-] Removed task: $taskName" -ForegroundColor DarkGray
     }
 }
-Stop-Process -Name "master_server", "metrics_agent" -Force -ErrorAction SilentlyContinue
+Stop-Process -Name "master_server", "metrics_agent", "terminal_proxy" -Force -ErrorAction SilentlyContinue
 Write-Host "  [+] Environment is clean." -ForegroundColor Green
 
 
@@ -39,16 +40,17 @@ function Deploy-Task($name, $path, $desc) {
         Start-ScheduledTask -TaskName $name
         Write-Host "  [*] Service '$name' -> ONLINE" -ForegroundColor Green
     } else {
-        Write-Host "  [!] ERROR: Binary '$path' not found!" -ForegroundColor Red
+        Write-Host "  [!] WARNING: Binary '$path' not found! Skipping..." -ForegroundColor Magenta
     }
 }
 
 Deploy-Task "ServerMaster" $masterExe "Cinelink Master Monitoring Server"
 Deploy-Task "ServerAgent" $agentExe "Cinelink Metrics Agent"
+Deploy-Task "ServerTerminal" $terminalExe "Cinelink Web SSH Terminal Proxy"
 
 
 Write-Host "`n[3/4] Configuring Windows Firewall..." -ForegroundColor Yellow
-for ($i = 1; $i -le 100; $i+=33) {
+for ($i = 1; $i -le 100; $i+=25) {
     Write-Progress -Activity "Deploying Cinelink" -Status "Adding firewall rules: $i%" -PercentComplete $i
     Start-Sleep -Milliseconds 50
 }
@@ -61,21 +63,29 @@ function Allow-Port($name, $port, $proto) {
 
 Allow-Port "Cinelink Master (TCP)" 8080 "TCP"
 Allow-Port "Cinelink Agent (TCP)" 8081 "TCP"
+Allow-Port "Cinelink Terminal (TCP)" 8085 "TCP"
 Allow-Port "Cinelink WoL (UDP)" 9 "UDP"
 Write-Host "  [+] Firewall rules successfully injected." -ForegroundColor Green
 
 
 Write-Host "`n[4/4] System Verification..." -ForegroundColor Yellow
 Write-Progress -Activity "Deploying Cinelink" -Status "Final checks: 100%" -PercentComplete 100
-Start-Sleep -Seconds 4
+Start-Sleep -Seconds 3
 
-$conn = Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue
-if ($conn) {
-    Write-Host "  [✔] SUCCESS: Port 8080 is responding." -ForegroundColor Green
+$connMaster = Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue
+if ($connMaster) {
+    Write-Host "  [✔] SUCCESS: Master Port 8080 is responding." -ForegroundColor Green
     Write-Host "  [✔] Launching monitoring dashboard..." -ForegroundColor Cyan
     Start-Process "http://127.0.0.1:8080/system-metrics"
 } else {
-    Write-Host "  [✘] ERROR: Port 8080 not found. Check server logs." -ForegroundColor Red
+    Write-Host "  [✘] WARNING: Port 8080 not found active yet. Check server logs if it fails." -ForegroundColor Yellow
+}
+
+$connTerminal = Get-NetTCPConnection -LocalPort 8085 -State Listen -ErrorAction SilentlyContinue
+if ($connTerminal) {
+    Write-Host "  [✔] SUCCESS: Terminal Proxy Port 8085 is actively listening." -ForegroundColor Green
+} else {
+    Write-Host "  [✘] WARNING: Terminal Proxy Port 8085 is offline." -ForegroundColor Yellow
 }
 
 Write-Host "`n----------------------------------------------------------" -ForegroundColor Gray

@@ -1,6 +1,6 @@
 #!/bin/bash
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
-OLD_SERVICES=("server_master" "server_agent" "system_metrics" "master_monitoring")
+OLD_SERVICES=("server_master" "server_agent" "server_terminal" "system_metrics" "master_monitoring")
 
 draw_progress() {
     local duration=$1
@@ -25,13 +25,15 @@ do_uninstall() {
     done
     sudo pkill -f "master_server" >/dev/null 2>&1
     sudo pkill -f "metrics_agent" >/dev/null 2>&1
+    sudo pkill -f "terminal_proxy" >/dev/null 2>&1
     sudo systemctl daemon-reload
 
-    rm -f "$DIR/master_server" "$DIR/metrics_agent"
+    rm -f "$DIR/master_server" "$DIR/metrics_agent" "$DIR/terminal_proxy"
 
     if command -v ufw >/dev/null 2>&1; then
         sudo ufw delete allow 8080/tcp >/dev/null 2>&1
         sudo ufw delete allow 8081/tcp >/dev/null 2>&1
+        sudo ufw delete allow 8085/tcp >/dev/null 2>&1
         sudo ufw delete allow 9/udp >/dev/null 2>&1
     fi
 
@@ -41,13 +43,18 @@ do_uninstall() {
 
 do_install() {
     echo -e "\n\e[1;33m[1/3] Compiling fresh binaries...\e[0m"
+    
     echo "  [*] Building Master Server..."
     go build -o master_server .
     if [ $? -ne 0 ]; then echo -e "  \e[1;31m✖ Build failed for Master\e[0m"; read -p "  Press Enter..."; return; fi
 
     echo "  [*] Building Metrics Agent..."
-    go build -o metrics_agent ./agent/metrix.go
+    go build -o metrics_agent ./agent
     if [ $? -ne 0 ]; then echo -e "  \e[1;31m✖ Build failed for Agent\e[0m"; read -p "  Press Enter..."; return; fi
+
+    echo "  [*] Building Terminal Proxy..."
+    go build -o terminal_proxy ./terminal
+    if [ $? -ne 0 ]; then echo -e "  \e[1;31m✖ Build failed for Terminal\e[0m"; read -p "  Press Enter..."; return; fi
 
     echo -e "\n\e[1;33m[2/3] Registering Systemd Services...\e[0m"
     draw_progress 1.5
@@ -84,19 +91,21 @@ EOL
 
     register_service "server_master" "master_server" "Master Monitoring Server"
     register_service "server_agent" "metrics_agent" "System Metrics Agent"
+    register_service "server_terminal" "terminal_proxy" "Web SSH Terminal Proxy"
 
     echo -e "\n\e[1;33m[3/3] Configuring Linux Firewall (UFW)...\e[0m"
     if command -v ufw >/dev/null 2>&1; then
         sudo ufw allow 8080/tcp >/dev/null 2>&1
         sudo ufw allow 8081/tcp >/dev/null 2>&1
+        sudo ufw allow 8085/tcp >/dev/null 2>&1
         sudo ufw allow 9/udp >/dev/null 2>&1
-        echo -e "  \e[32m✔ Ports 8080, 8081 (TCP) and 9 (UDP) opened successfully.\e[0m"
+        echo -e "  \e[32m✔ Ports 8080, 8081, 8085 (TCP) and 9 (UDP) opened successfully.\e[0m"
     else
         echo -e "  \e[33m⚠ UFW is not installed. Skipping firewall configuration.\e[0m"
     fi
 
     echo -e "\n\e[1;36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[0m"
-    echo -e "         Deployment Finished. Systems are Nominal.           "
+    echo -e "           Deployment Finished. Systems are Nominal.           "
     echo -e "\e[1;36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[0m"
     read -p "  Press Enter to return to menu..."
 }
