@@ -25,6 +25,12 @@ type AuthMessage struct {
 	Pass string `json:"pass"`
 }
 
+type WSCommand struct {
+	Type string `json:"type"`
+	Cols int    `json:"cols"`
+	Rows int    `json:"rows"`
+}
+
 const serversFile = "servers.json"
 
 var fileMutex sync.Mutex
@@ -108,6 +114,15 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			break
 		}
+
+		var cmd WSCommand
+		err = json.Unmarshal(message, &cmd)
+
+		if err == nil && cmd.Type == "resize" {
+			session.WindowChange(cmd.Rows, cmd.Cols)
+			continue
+		}
+
 		stdin.Write(message)
 	}
 }
