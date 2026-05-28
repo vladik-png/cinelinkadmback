@@ -10,30 +10,10 @@ import (
 
 	"admin-aws/internal/config"
 	"admin-aws/internal/database"
-	"admin-aws/internal/models"
 	"admin-aws/internal/services"
-	"admin-aws/internal/state"
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 )
-
-func HandleLogEvent(w http.ResponseWriter, r *http.Request) {
-	var data map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	
-	instanceID, _ := data["instance_id"].(string)
-	action, _ := data["action"].(string)
-	status, _ := data["status"].(string)
-	details, _ := data["details"].(string)
-	
-	if instanceID != "" {
-		database.LogEvent(instanceID, action, status, details)
-	}
-	w.WriteHeader(http.StatusOK)
-}
 
 func GetKamateraInstances(w http.ResponseWriter, r *http.Request) {
 	clientID := config.GetEnv("KAMATERA_CLIENT_ID", "")
@@ -76,7 +56,8 @@ func StartInstance(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 
 	if srv, exists := config.ServersList[id]; exists {
-		if srv.Provider == "Local" {
+		switch srv.Provider {
+		case "Local":
 			err := services.WakeOnLan(srv.MacAddress, srv.WoLTargets)
 			if err != nil {
 				database.LogEvent(id, "START", "FAILED", err.Error())
@@ -84,7 +65,7 @@ func StartInstance(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			database.LogEvent(id, "START", "SUCCESS", "Wake-on-LAN packet sent")
-		} else if srv.Provider == "DigitalOcean" {
+		case "DigitalOcean":
 			token := config.GetEnv("DIGITALOCEAN_TOKEN", "")
 			if token == "" {
 				database.LogEvent(id, "START", "FAILED", "DigitalOcean token missing")
@@ -207,72 +188,4 @@ func GetInstances(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(instances)
-}
-
-func ReceiveMetricsFromAgent(w http.ResponseWriter, r *http.Request) {
-	var data map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	id, ok := data["instance_id"].(string)
-	if !ok {
-		return
-	}
-
-	state.MetricsMu.Lock()
-	state.LatestMetrics[id] = models.ServerState{
-		LastSeen: time.Now(),
-		Metrics:  data,
-	}
-	state.MetricsMu.Unlock()
-
-	if database.DB != nil {
-		database.DB.Model(&models.ServerAlert{}).Where("server_id = ? AND type = ? AND resolved = ?", id, "OFFLINE", false).Update("resolved", true)
-	}
-	w.WriteHeader(http.StatusOK)
-}
-
-func GetLogs(w http.ResponseWriter, r *http.Request) {
-	var logs []models.ServerLog
-	if database.DB != nil {
-		database.DB.Order("created_at desc").Limit(50).Find(&logs)
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(logs)
-}
-
-func GetAlerts(w http.ResponseWriter, r *http.Request) {
-	var alerts []models.ServerAlert
-	if database.DB != nil {
-		database.DB.Where("resolved = ?", false).Order("created_at desc").Find(&alerts)
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(alerts)
-}
-
-func GetMetricsForFront(w http.ResponseWriter, r *http.Request) {
-	state.MetricsMu.Lock()
-	defer state.MetricsMu.Unlock()
-
-	frontData := make(map[string]interface{})
-	for id, s := range state.LatestMetrics {
-		frontData[id] = s.Metrics
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(frontData)
-}
-
-func EnableCORS(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		next(w, r)
-	}
 }
