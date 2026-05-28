@@ -1,37 +1,40 @@
-package main
+package services
 
 import (
 	"fmt"
 	"net"
 	"time"
+
+	"admin-aws/internal/state"
+	"admin-aws/internal/database"
 )
 
-func monitorServers() {
+func MonitorServers() {
 	for {
 		time.Sleep(30 * time.Second)
 
-		metricsMu.Lock()
+		state.MetricsMu.Lock()
 		now := time.Now()
 
-		for id, state := range latestMetrics {
-			if now.Sub(state.LastSeen) > 2*time.Minute {
-				createAlert(id, "OFFLINE", "Server has not reported metrics for over 2 minutes")
-				delete(latestMetrics, id)
+		for id, s := range state.LatestMetrics {
+			if now.Sub(s.LastSeen) > 2*time.Minute {
+				database.CreateAlert(id, "OFFLINE", "Server has not reported metrics for over 2 minutes")
+				delete(state.LatestMetrics, id)
 				continue
 			}
 
-			if cpuOpt, ok := state.Metrics["cpu_usage"]; ok {
+			if cpuOpt, ok := s.Metrics["cpu_usage"]; ok {
 				if cpu, isFloat := cpuOpt.(float64); isFloat && cpu > 90.0 {
 					msg := fmt.Sprintf("Critical CPU usage: %.1f%%", cpu)
-					createAlert(id, "OVERLOAD", msg)
+					database.CreateAlert(id, "OVERLOAD", msg)
 				}
 			}
 		}
-		metricsMu.Unlock()
+		state.MetricsMu.Unlock()
 	}
 }
 
-func wakeOnLan(macAddr string, targets []string) error {
+func WakeOnLan(macAddr string, targets []string) error {
 	hwAddr, err := net.ParseMAC(macAddr)
 	if err != nil {
 		return err

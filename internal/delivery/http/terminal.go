@@ -1,10 +1,9 @@
-package main
+package httpdelivery
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"sync"
@@ -32,7 +31,6 @@ type WSCommand struct {
 }
 
 const serversFile = "servers.json"
-
 var fileMutex sync.Mutex
 
 func connectSSH(host, user, pass string) (*ssh.Client, error) {
@@ -46,7 +44,7 @@ func connectSSH(host, user, pass string) (*ssh.Client, error) {
 	return ssh.Dial("tcp", host+":22", config)
 }
 
-func handleTerminal(w http.ResponseWriter, r *http.Request) {
+func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return
@@ -127,7 +125,7 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handleUpload(w http.ResponseWriter, r *http.Request) {
+func HandleUpload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	if r.Method == "OPTIONS" {
 		return
@@ -172,7 +170,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func handleServers(w http.ResponseWriter, r *http.Request) {
+func HandleServers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
@@ -214,12 +212,4 @@ func handleServers(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-}
-
-func main() {
-	http.HandleFunc("/ssh", handleTerminal)
-	http.HandleFunc("/upload", handleUpload)
-	http.HandleFunc("/servers", handleServers)
-	fmt.Println("Proxy running on :8085")
-	log.Fatal(http.ListenAndServe(":8085", nil))
 }

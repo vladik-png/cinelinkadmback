@@ -15,9 +15,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
-	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"
-	"github.com/yusufpapurcu/wmi"
 )
 
 var (
@@ -28,10 +26,6 @@ var (
 	InstanceID     string
 	AgentPort      string
 )
-
-type Win32_Temperature struct {
-	CurrentTemperature uint32
-}
 
 func getEnv(key, fallback string) string {
 	if value, exists := os.LookupEnv(key); exists && value != "" {
@@ -88,29 +82,6 @@ func initStaticInfo() {
 		ServerLocation = "Offline"
 		PublicIP = "Offline"
 	}
-}
-
-func getCPUTemperature() float64 {
-	if runtime.GOOS == "windows" {
-		var dst []Win32_Temperature
-		q := "SELECT CurrentTemperature FROM MSAcpi_ThermalZoneTemperature"
-		err := wmi.Query(q, &dst)
-		if err != nil || len(dst) == 0 {
-			return 0
-		}
-		return (float64(dst[0].CurrentTemperature) - 2732.0) / 10.0
-	} else {
-		// Для Linux
-		temps, err := host.SensorsTemperatures()
-		if err == nil {
-			for _, t := range temps {
-				if strings.Contains(strings.ToLower(t.SensorKey), "cpu") || strings.Contains(strings.ToLower(t.SensorKey), "core") {
-					return t.Temperature
-				}
-			}
-		}
-	}
-	return 0
 }
 
 func MathRound(val float64) float64 {
@@ -191,9 +162,9 @@ func main() {
 	log.Println("Initializing agent...")
 	godotenv.Load()
 
-	MasterURL = getEnv("MASTER_URL", "http://127.0.0.1:8080/report-metrics")
+	MasterURL = getEnv("MASTER_URL", "http://127.0.0.1:8081/report-metrics")
 	InstanceID = getEnv("INSTANCE_ID", "my-windows-server")
-	AgentPort = getEnv("AGENT_PORT", "8081")
+	AgentPort = getEnv("AGENT_PORT", "8082")
 
 	initStaticInfo()
 	

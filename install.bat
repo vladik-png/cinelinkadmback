@@ -62,7 +62,7 @@ go build -o master_server.exe .
 if %errorlevel% neq 0 goto error
 
 echo        * Building Metrics Agent...
-go build -ldflags "-H=windowsgui" -o metrics_agent.exe ./agent/metrix.go
+go build -ldflags "-H=windowsgui" -o metrics_agent.exe ./cmd/agent
 if %errorlevel% neq 0 goto error
 
 echo.

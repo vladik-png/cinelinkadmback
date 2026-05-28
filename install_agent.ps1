@@ -1,7 +1,6 @@
 $currentDir = $PSScriptRoot
 $masterExe = Join-Path -Path $currentDir -ChildPath "master_server.exe"
 $agentExe = Join-Path -Path $currentDir -ChildPath "metrics_agent.exe"
-$terminalExe = Join-Path -Path $currentDir -ChildPath "terminal_proxy.exe"
 $oldTasks = @("ServerMaster", "ServerAgent", "ServerTerminal", "SystemMetricsAgent", "SystemMasterServer")
 
 Clear-Host
@@ -31,7 +30,7 @@ for ($i = 1; $i -le 100; $i+=10) {
     Start-Sleep -Milliseconds 50
 }
 
-function Deploy-Task($name, $path, $desc) {
+function Register-Task($name, $path, $desc) {
     if (Test-Path $path) {
         $action = New-ScheduledTaskAction -Execute $path -WorkingDirectory $currentDir
         $trigger = New-ScheduledTaskTrigger -AtStartup
@@ -44,10 +43,8 @@ function Deploy-Task($name, $path, $desc) {
     }
 }
 
-Deploy-Task "ServerMaster" $masterExe "Cinelink Master Monitoring Server"
-Deploy-Task "ServerAgent" $agentExe "Cinelink Metrics Agent"
-Deploy-Task "ServerTerminal" $terminalExe "Cinelink Web SSH Terminal Proxy"
-
+Register-Task "ServerMaster" $masterExe "Cinelink Master Monitoring Server"
+Register-Task "ServerAgent" $agentExe "Cinelink Metrics Agent"
 
 Write-Host "`n[3/4] Configuring Windows Firewall..." -ForegroundColor Yellow
 for ($i = 1; $i -le 100; $i+=25) {
@@ -55,16 +52,15 @@ for ($i = 1; $i -le 100; $i+=25) {
     Start-Sleep -Milliseconds 50
 }
 
-function Allow-Port($name, $port, $proto) {
+function Enable-Port($name, $port, $proto) {
     Remove-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue | Out-Null
     New-NetFirewallRule -DisplayName $name -Direction Inbound -LocalPort $port -Protocol $proto -Action Allow -Profile Any | Out-Null
     Write-Host "  [+] Opened port: $port ($proto)" -ForegroundColor DarkGray
 }
 
-Allow-Port "Cinelink Master (TCP)" 8080 "TCP"
-Allow-Port "Cinelink Agent (TCP)" 8081 "TCP"
-Allow-Port "Cinelink Terminal (TCP)" 8085 "TCP"
-Allow-Port "Cinelink WoL (UDP)" 9 "UDP"
+Enable-Port "Cinelink Master (TCP)" 8081 "TCP"
+Enable-Port "Cinelink Agent (TCP)" 8082 "TCP"
+Enable-Port "Cinelink WoL (UDP)" 9 "UDP"
 Write-Host "  [+] Firewall rules successfully injected." -ForegroundColor Green
 
 
@@ -72,20 +68,13 @@ Write-Host "`n[4/4] System Verification..." -ForegroundColor Yellow
 Write-Progress -Activity "Deploying Cinelink" -Status "Final checks: 100%" -PercentComplete 100
 Start-Sleep -Seconds 3
 
-$connMaster = Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue
+$connMaster = Get-NetTCPConnection -LocalPort 8081 -State Listen -ErrorAction SilentlyContinue
 if ($connMaster) {
-    Write-Host "  [✔] SUCCESS: Master Port 8080 is responding." -ForegroundColor Green
+    Write-Host "  [✔] SUCCESS: Master Port 8081 is responding." -ForegroundColor Green
     Write-Host "  [✔] Launching monitoring dashboard..." -ForegroundColor Cyan
-    Start-Process "http://127.0.0.1:8080/system-metrics"
+    Start-Process "http://127.0.0.1:8081/system-metrics"
 } else {
-    Write-Host "  [✘] WARNING: Port 8080 not found active yet. Check server logs if it fails." -ForegroundColor Yellow
-}
-
-$connTerminal = Get-NetTCPConnection -LocalPort 8085 -State Listen -ErrorAction SilentlyContinue
-if ($connTerminal) {
-    Write-Host "  [✔] SUCCESS: Terminal Proxy Port 8085 is actively listening." -ForegroundColor Green
-} else {
-    Write-Host "  [✘] WARNING: Terminal Proxy Port 8085 is offline." -ForegroundColor Yellow
+    Write-Host "  [✘] WARNING: Port 8081 not found active yet. Check server logs if it fails." -ForegroundColor Yellow
 }
 
 Write-Host "`n----------------------------------------------------------" -ForegroundColor Gray

@@ -49,12 +49,8 @@ do_install() {
     if [ $? -ne 0 ]; then echo -e "  \e[1;31m✖ Build failed for Master\e[0m"; read -p "  Press Enter..."; return; fi
 
     echo "  [*] Building Metrics Agent..."
-    go build -o metrics_agent ./agent
+    go build -o metrics_agent ./cmd/agent
     if [ $? -ne 0 ]; then echo -e "  \e[1;31m✖ Build failed for Agent\e[0m"; read -p "  Press Enter..."; return; fi
-
-    echo "  [*] Building Terminal Proxy..."
-    go build -o terminal_proxy ./terminal
-    if [ $? -ne 0 ]; then echo -e "  \e[1;31m✖ Build failed for Terminal\e[0m"; read -p "  Press Enter..."; return; fi
 
     echo -e "\n\e[1;33m[2/3] Registering Systemd Services...\e[0m"
     draw_progress 1.5
@@ -91,15 +87,13 @@ EOL
 
     register_service "server_master" "master_server" "Master Monitoring Server"
     register_service "server_agent" "metrics_agent" "System Metrics Agent"
-    register_service "server_terminal" "terminal_proxy" "Web SSH Terminal Proxy"
 
     echo -e "\n\e[1;33m[3/3] Configuring Linux Firewall (UFW)...\e[0m"
     if command -v ufw >/dev/null 2>&1; then
-        sudo ufw allow 8080/tcp >/dev/null 2>&1
         sudo ufw allow 8081/tcp >/dev/null 2>&1
-        sudo ufw allow 8085/tcp >/dev/null 2>&1
+        sudo ufw allow 8082/tcp >/dev/null 2>&1
         sudo ufw allow 9/udp >/dev/null 2>&1
-        echo -e "  \e[32m✔ Ports 8080, 8081, 8085 (TCP) and 9 (UDP) opened successfully.\e[0m"
+        echo -e "  \e[32m✔ Ports 8081, 8082 (TCP) and 9 (UDP) opened successfully.\e[0m"
     else
         echo -e "  \e[33m⚠ UFW is not installed. Skipping firewall configuration.\e[0m"
     fi
