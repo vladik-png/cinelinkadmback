@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"runtime"
 
 	"admin-aws/internal/models"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -31,11 +32,16 @@ func InitConfig() {
 	kamateraIP := GetEnv("KAMATERA_PUBLIC_IP", "0.0.0.0")
 	doToken := GetEnv("DIGITALOCEAN_TOKEN", "")
 
+	hostName, err := os.Hostname()
+	if err != nil {
+		hostName = "local-pc"
+	}
+
 	ServersList = map[string]models.ServerConfig{
-		"my-windows-server": {
-			ID:         "my-windows-server",
+		hostName: {
+			ID:         hostName,
 			Provider:   "Local",
-			Platform:   "Windows",
+			Platform:   runtime.GOOS,
 			MacAddress: GetEnv("WINDOWS_MAC", "00:25:90:9A:4A:C0"),
 			AgentURL:   GetEnv("WINDOWS_AGENT_URL", "http://127.0.0.1:8082"),
 			WoLTargets: []string{

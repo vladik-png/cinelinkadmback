@@ -141,7 +141,7 @@ func collectAndSendMetrics() {
 		"time":        time.Now().Format("15:04:05"),
 		"cpu_usage":   MathRound(cpuVal),
 		"cpu_temp":    MathRound(getCPUTemperature()),
-		"ram":         MathRound(vMem.UsedPercent),
+		"ram":         MathRound(float64(vMem.Total) / (1024 * 1024 * 1024)),
 		"disk":        fmt.Sprintf("%.2f", d.UsedPercent),
 		"ping":        latency,
 		"packet_loss": packetLoss,
@@ -163,10 +163,14 @@ func main() {
 	godotenv.Load()
 
 	MasterURL = getEnv("MASTER_URL", "http://127.0.0.1:8081/report-metrics")
-	InstanceID = getEnv("INSTANCE_ID", "my-windows-server")
+	InstanceID = getEnv("INSTANCE_ID", "")
 	AgentPort = getEnv("AGENT_PORT", "8082")
 
 	initStaticInfo()
+
+	if InstanceID == "" || InstanceID == "local-pc" {
+		InstanceID = DeviceName
+	}
 	
 	sendLog("BOOT_COMPLETE", "SUCCESS", fmt.Sprintf("Agent started on %s (%s)", DeviceName, runtime.GOOS))
 
