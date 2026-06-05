@@ -111,12 +111,13 @@ func StopInstance(w http.ResponseWriter, r *http.Request) {
 	if srv, exists := config.ServersList[id]; exists {
 		switch srv.Provider {
 		case "Local":
-			_, err := http.Get(srv.AgentURL + "/shutdown")
+			resp, err := http.Get(srv.AgentURL + "/shutdown")
 			if err != nil {
 				database.LogEvent(id, "STOP", "FAILED", "Agent unavailable: "+err.Error())
 				http.Error(w, err.Error(), 500)
 				return
 			}
+			resp.Body.Close()
 			database.LogEvent(id, "STOP", "SUCCESS", "Shutdown command sent to Agent")
 		case "DigitalOcean":
 			token := config.GetEnv("DIGITALOCEAN_TOKEN", "")

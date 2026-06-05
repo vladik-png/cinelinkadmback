@@ -48,7 +48,10 @@ func sendLog(action, status, details string) {
 	jsonData, err := json.Marshal(payload)
 	if err == nil {
 		client := http.Client{Timeout: 3 * time.Second}
-		client.Post(logURL, "application/json", bytes.NewBuffer(jsonData))
+		resp, err := client.Post(logURL, "application/json", bytes.NewBuffer(jsonData))
+		if err == nil {
+			resp.Body.Close()
+		}
 	}
 }
 

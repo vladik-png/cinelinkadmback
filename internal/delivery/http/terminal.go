@@ -85,6 +85,8 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 	stderr, _ := session.StderrPipe()
 	session.Shell()
 
+	var wsMutex sync.Mutex
+
 	go func() {
 		buf := make([]byte, 1024)
 		for {
@@ -92,7 +94,9 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return
 			}
+			wsMutex.Lock()
 			ws.WriteMessage(websocket.TextMessage, buf[:n])
+			wsMutex.Unlock()
 		}
 	}()
 
@@ -103,7 +107,9 @@ func HandleTerminal(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return
 			}
+			wsMutex.Lock()
 			ws.WriteMessage(websocket.TextMessage, buf[:n])
+			wsMutex.Unlock()
 		}
 	}()
 
