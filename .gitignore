@@ -1,4 +1,3 @@
-.env
 .env.local
 dist/
 build/
@@ -23,3 +22,7 @@ coverage/
 *.tgz
 templates/index.html
 servers.json
+.env
+.env.*.local
+*.env
+*.env.local
