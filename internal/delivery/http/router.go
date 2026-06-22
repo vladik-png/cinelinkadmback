@@ -24,6 +24,7 @@ func SetupRouter() *http.ServeMux {
 	mux.HandleFunc("/shutdown", EnableCORS(HandleShutdown))
 
 	mux.HandleFunc("/ssh", HandleTerminal) 
+	mux.HandleFunc("/rdp-tunnel", EnableCORS(HandleRDPTunnel))
 	mux.HandleFunc("/upload", HandleUpload)
 	mux.HandleFunc("/servers", HandleServers)
 
