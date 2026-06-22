@@ -1,16 +1,19 @@
 package main
 
 import (
+	"crypto/tls"
 	"log"
 	"net/http"
+	"os"
 
 	"admin-aws/internal/agent"
 	"admin-aws/internal/config"
 	"admin-aws/internal/database"
-httpdelivery "admin-aws/internal/delivery/http"
+	httpdelivery "admin-aws/internal/delivery/http"
 	"admin-aws/internal/services"
 
 	"github.com/joho/godotenv"
+	"golang.org/x/crypto/acme/autocert"
 )
 
 func main() {
@@ -25,7 +28,44 @@ func main() {
 
 	router := httpdelivery.SetupRouter()
 
-	port := ":8081"
-	log.Printf("Unified Backend Server started on port %s", port)
-	log.Fatal(http.ListenAndServe(port, router))
+	domain := os.Getenv("DOMAIN")
+
+	if domain != "" {
+		log.Printf("Starting secure server for domain %s (Ports 80/443)", domain)
+
+		// Create certs directory if it doesn't exist
+		if err := os.MkdirAll("certs", 0700); err != nil {
+			log.Fatalf("Failed to create certs directory: %v", err)
+		}
+
+		// Set up autocert manager
+		certManager := autocert.Manager{
+			Prompt:     autocert.AcceptTOS,
+			HostPolicy: autocert.HostWhitelist(domain),
+			Cache:      autocert.DirCache("certs"), // Store certs in local 'certs' directory
+		}
+
+		// Start HTTP server for redirecting to HTTPS and ACME challenge
+		go func() {
+			log.Printf("Starting HTTP-to-HTTPS redirect and ACME listener on port 80")
+			log.Fatal(http.ListenAndServe(":80", certManager.HTTPHandler(nil)))
+		}()
+
+		// Set up HTTPS server
+		server := &http.Server{
+			Addr:    ":443",
+			Handler: router,
+			TLSConfig: &tls.Config{
+				GetCertificate: certManager.GetCertificate,
+				MinVersion:     tls.VersionTLS12,
+			},
+		}
+
+		log.Printf("Starting primary HTTPS server on port 443")
+		log.Fatal(server.ListenAndServeTLS("", ""))
+	} else {
+		port := ":8081"
+		log.Printf("DOMAIN not set in .env. Starting standard backend server on port %s", port)
+		log.Fatal(http.ListenAndServe(port, router))
+	}
 }

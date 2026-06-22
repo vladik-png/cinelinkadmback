@@ -26,3 +26,4 @@ servers.json
 .env.*.local
 *.env
 *.env.local
+backend.exe
