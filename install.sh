@@ -1,6 +1,6 @@
 #!/bin/bash
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
-OLD_SERVICES=("server_master" "server_agent" "server_terminal" "system_metrics" "master_monitoring")
+OLD_SERVICES=("server_master" "server_agent" "server_terminal" "system_metrics" "master_monitoring" "cinelink_backend")
 
 draw_progress() {
     local duration=$1
@@ -26,13 +26,15 @@ do_uninstall() {
     sudo pkill -f "master_server" >/dev/null 2>&1
     sudo pkill -f "metrics_agent" >/dev/null 2>&1
     sudo pkill -f "terminal_proxy" >/dev/null 2>&1
+    sudo pkill -f "backend" >/dev/null 2>&1
     sudo systemctl daemon-reload
 
-    rm -f "$DIR/master_server" "$DIR/metrics_agent" "$DIR/terminal_proxy"
+    rm -f "$DIR/master_server" "$DIR/metrics_agent" "$DIR/terminal_proxy" "$DIR/backend"
 
     if command -v ufw >/dev/null 2>&1; then
         sudo ufw delete allow 8080/tcp >/dev/null 2>&1
         sudo ufw delete allow 8081/tcp >/dev/null 2>&1
+        sudo ufw delete allow 8082/tcp >/dev/null 2>&1
         sudo ufw delete allow 8085/tcp >/dev/null 2>&1
         sudo ufw delete allow 9/udp >/dev/null 2>&1
     fi
@@ -42,15 +44,11 @@ do_uninstall() {
 }
 
 do_install() {
-    echo -e "\n\e[1;33m[1/3] Compiling fresh binaries...\e[0m"
+    echo -e "\n\e[1;33m[1/3] Compiling fresh binary...\e[0m"
     
-    echo "  [*] Building Master Server..."
-    go build -o master_server .
-    if [ $? -ne 0 ]; then echo -e "  \e[1;31m✖ Build failed for Master\e[0m"; read -p "  Press Enter..."; return; fi
-
-    echo "  [*] Building Metrics Agent..."
-    go build -o metrics_agent ./cmd/agent
-    if [ $? -ne 0 ]; then echo -e "  \e[1;31m✖ Build failed for Agent\e[0m"; read -p "  Press Enter..."; return; fi
+    echo "  [*] Building Backend Server..."
+    go build -o backend main.go
+    if [ $? -ne 0 ]; then echo -e "  \e[1;31m✖ Build failed\e[0m"; read -p "  Press Enter..."; return; fi
 
     echo -e "\n\e[1;33m[2/3] Registering Systemd Services...\e[0m"
     draw_progress 1.5
@@ -85,15 +83,13 @@ EOL
         fi
     }
 
-    register_service "server_master" "master_server" "Master Monitoring Server"
-    register_service "server_agent" "metrics_agent" "System Metrics Agent"
+    register_service "cinelink_backend" "backend" "Cinelink Unified Backend Server"
 
     echo -e "\n\e[1;33m[3/3] Configuring Linux Firewall (UFW)...\e[0m"
     if command -v ufw >/dev/null 2>&1; then
         sudo ufw allow 8081/tcp >/dev/null 2>&1
-        sudo ufw allow 8082/tcp >/dev/null 2>&1
         sudo ufw allow 9/udp >/dev/null 2>&1
-        echo -e "  \e[32m✔ Ports 8081, 8082 (TCP) and 9 (UDP) opened successfully.\e[0m"
+        echo -e "  \e[32m✔ Ports 8081 (TCP) and 9 (UDP) opened successfully.\e[0m"
     else
         echo -e "  \e[33m⚠ UFW is not installed. Skipping firewall configuration.\e[0m"
     fi

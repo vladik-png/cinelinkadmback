@@ -7,7 +7,7 @@ import (
 	"admin-aws/internal/agent"
 	"admin-aws/internal/config"
 	"admin-aws/internal/database"
-	httpdelivery "admin-aws/internal/delivery/http"
+httpdelivery "admin-aws/internal/delivery/http"
 	"admin-aws/internal/services"
 
 	"github.com/joho/godotenv"
