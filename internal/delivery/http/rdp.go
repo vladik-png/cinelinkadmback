@@ -2,11 +2,11 @@ package httpdelivery
 
 import (
 	"encoding/json"
-	"io"
 	"log"
-	"net"
 	"net/http"
-	"time"
+	"sync"
+
+	"github.com/gorilla/websocket"
 )
 
 type RDPTunnelRequest struct {
@@ -15,86 +15,86 @@ type RDPTunnelRequest struct {
 	Pass string `json:"pass"`
 }
 
-type RDPTunnelResponse struct {
-	Status string `json:"status"`
-	Port   int    `json:"port"`
-	Error  string `json:"error,omitempty"`
-}
+func HandleRDPWebSocket(w http.ResponseWriter, r *http.Request) {
+	ws, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("Failed to upgrade RDP websocket: %v", err)
+		return
+	}
+	defer ws.Close()
 
-func HandleRDPTunnel(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
+	_, authData, err := ws.ReadMessage()
+	if err != nil {
 		return
 	}
 
-	var host, user, pass string
-	if r.Header.Get("Content-Type") == "application/json" {
-		var req RDPTunnelRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
-			host, user, pass = req.Host, req.User, req.Pass
+	var auth AuthMessage
+	if err := json.Unmarshal(authData, &auth); err != nil || auth.Host == "" {
+		var rdpReq RDPTunnelRequest
+		if err := json.Unmarshal(authData, &rdpReq); err == nil && rdpReq.Host != "" {
+			auth.Host = rdpReq.Host
+			auth.User = rdpReq.User
+			auth.Pass = rdpReq.Pass
+		} else {
+			ws.WriteMessage(websocket.TextMessage, []byte(`{"error": "Invalid auth data"}`))
+			return
 		}
-	} else {
-		host = r.FormValue("host")
-		user = r.FormValue("user")
-		pass = r.FormValue("pass")
 	}
 
-	if host == "" || user == "" {
-		json.NewEncoder(w).Encode(RDPTunnelResponse{Status: "error", Error: "Missing credentials"})
-		return
-	}
-
-	sshClient, err := connectSSH(host, user, pass)
+	sshClient, err := connectSSH(auth.Host, auth.User, auth.Pass)
 	if err != nil {
-		json.NewEncoder(w).Encode(RDPTunnelResponse{Status: "error", Error: "SSH connection failed: " + err.Error()})
+		ws.WriteMessage(websocket.TextMessage, []byte(`{"error": "SSH connection failed"}`))
 		return
 	}
+	defer sshClient.Close()
 
-	listener, err := net.Listen("tcp", "0.0.0.0:0")
+	remoteConn, err := sshClient.Dial("tcp", "127.0.0.1:3389")
 	if err != nil {
-		sshClient.Close()
-		json.NewEncoder(w).Encode(RDPTunnelResponse{Status: "error", Error: "Failed to allocate local port"})
+		ws.WriteMessage(websocket.TextMessage, []byte(`{"error": "Failed to dial remote RDP port"}`))
 		return
 	}
+	defer remoteConn.Close()
 
-	port := listener.Addr().(*net.TCPAddr).Port
+	ws.WriteMessage(websocket.TextMessage, []byte(`{"status": "connected"}`))
+
+	var wsMutex sync.Mutex
+	done := make(chan struct{})
 
 	go func() {
-		defer sshClient.Close()
-		defer listener.Close()
-
-		listener.(*net.TCPListener).SetDeadline(time.Now().Add(2 * time.Minute))
-
-		localConn, err := listener.Accept()
-		if err != nil {
-			log.Printf("RDP tunnel timeout or error for %s: %v", host, err)
-			return
+		defer close(done)
+		for {
+			msgType, msg, err := ws.ReadMessage()
+			if err != nil {
+				break
+			}
+			if msgType == websocket.BinaryMessage || msgType == websocket.TextMessage {
+				_, err = remoteConn.Write(msg)
+				if err != nil {
+					break
+				}
+			}
 		}
-		defer localConn.Close()
-
-		listener.(*net.TCPListener).SetDeadline(time.Time{})
-
-		remoteConn, err := sshClient.Dial("tcp", "127.0.0.1:3389")
-		if err != nil {
-			log.Printf("Failed to dial remote RDP port for %s: %v", host, err)
-			return
-		}
-		defer remoteConn.Close()
-
-		errc := make(chan error, 2)
-		go func() {
-			_, err := io.Copy(remoteConn, localConn)
-			errc <- err
-		}()
-		go func() {
-			_, err := io.Copy(localConn, remoteConn)
-			errc <- err
-		}()
-
-		<-errc
-		log.Printf("RDP tunnel closed for %s", host)
 	}()
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(RDPTunnelResponse{Status: "success", Port: port})
+	go func() {
+		buf := make([]byte, 32768)
+		for {
+			n, err := remoteConn.Read(buf)
+			if err != nil {
+				break
+			}
+			
+			wsMutex.Lock()
+			err = ws.WriteMessage(websocket.BinaryMessage, buf[:n])
+			wsMutex.Unlock()
+			
+			if err != nil {
+				break
+			}
+		}
+		ws.Close()
+	}()
+
+	<-done
+	log.Printf("RDP WebSocket session closed for %s", auth.Host)
 }
