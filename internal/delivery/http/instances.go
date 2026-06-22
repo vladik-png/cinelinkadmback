@@ -80,7 +80,11 @@ func GetKamateraInstances(w http.ResponseWriter, r *http.Request) {
 func StartInstance(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 
-	if srv, exists := config.ServersList[id]; exists {
+	config.ServersMutex.RLock()
+	srv, exists := config.ServersList[id]
+	config.ServersMutex.RUnlock()
+
+	if exists {
 		switch srv.Provider {
 		case "Local":
 			err := services.WakeOnLan(srv.MacAddress, srv.WoLTargets)
@@ -133,7 +137,11 @@ func StartInstance(w http.ResponseWriter, r *http.Request) {
 func StopInstance(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 
-	if srv, exists := config.ServersList[id]; exists {
+	config.ServersMutex.RLock()
+	srv, exists := config.ServersList[id]
+	config.ServersMutex.RUnlock()
+
+	if exists {
 		switch srv.Provider {
 		case "Local":
 			resp, err := http.Get(srv.AgentURL + "/shutdown")
@@ -187,6 +195,7 @@ func StopInstance(w http.ResponseWriter, r *http.Request) {
 func GetInstances(w http.ResponseWriter, r *http.Request) {
 	instances := make([]map[string]interface{}, 0)
 
+	config.ServersMutex.RLock()
 	for _, srv := range config.ServersList {
 		instances = append(instances, map[string]interface{}{
 			"InstanceId": srv.ID,
@@ -195,6 +204,7 @@ func GetInstances(w http.ResponseWriter, r *http.Request) {
 			"State":      "unknown",
 		})
 	}
+	config.ServersMutex.RUnlock()
 
 	awsMutex.Lock()
 	if time.Since(awsCacheTime) < 30*time.Second && awsCache != nil {

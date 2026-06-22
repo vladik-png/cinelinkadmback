@@ -2,9 +2,14 @@ package config
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"runtime"
+	"sync"
+	"time"
 
 	"admin-aws/internal/models"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -13,8 +18,9 @@ import (
 )
 
 var (
-	EC2Client   *ec2.Client
-	ServersList map[string]models.ServerConfig
+	EC2Client    *ec2.Client
+	ServersList  map[string]models.ServerConfig
+	ServersMutex sync.RWMutex
 )
 
 func GetEnv(key, fallback string) string {
@@ -64,7 +70,16 @@ func InitConfig() {
 	}
 	
 	if doToken == "" {
-		log.Println("DIGITALOCEAN_TOKEN not set, DO API operations will fail")
+		log.Println("DIGITALOCEAN_TOKEN not set, DO API auto-discovery will fail")
+	} else {
+		log.Println("DIGITALOCEAN_TOKEN found, starting auto-discovery...")
+		syncDigitalOceanServers()
+		go func() {
+			for {
+				time.Sleep(5 * time.Minute)
+				syncDigitalOceanServers()
+			}
+		}()
 	}
 
 	region := GetEnv("AWS_DEFAULT_REGION", "eu-north-1")
@@ -74,4 +89,67 @@ func InitConfig() {
 	} else {
 		EC2Client = ec2.NewFromConfig(cfg)
 	}
+}
+
+type DODropletsResponse struct {
+	Droplets []struct {
+		ID       int    `json:"id"`
+		Name     string `json:"name"`
+		Networks struct {
+			V4 []struct {
+				IPAddress string `json:"ip_address"`
+				Type      string `json:"type"`
+			} `json:"v4"`
+		} `json:"networks"`
+	} `json:"droplets"`
+}
+
+func syncDigitalOceanServers() {
+	doToken := GetEnv("DIGITALOCEAN_TOKEN", "")
+	if doToken == "" {
+		return
+	}
+
+	req, err := http.NewRequest("GET", "https://api.digitalocean.com/v2/droplets", nil)
+	if err != nil {
+		log.Println("Error creating DO request:", err)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+doToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Println("Error fetching DO droplets:", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	var result DODropletsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Println("Error decoding DO droplets:", err)
+		return
+	}
+
+	ServersMutex.Lock()
+	for _, droplet := range result.Droplets {
+		ip := ""
+		for _, v4 := range droplet.Networks.V4 {
+			if v4.Type == "public" {
+				ip = v4.IPAddress
+				break
+			}
+		}
+
+		key := fmt.Sprintf("digitalocean-%d", droplet.ID)
+		ServersList[key] = models.ServerConfig{
+			ID:       fmt.Sprintf("%d", droplet.ID),
+			Provider: "DigitalOcean",
+			Platform: "Linux",
+			AgentURL: fmt.Sprintf("http://%s:8083", ip),
+		}
+	}
+	ServersMutex.Unlock()
+	log.Printf("DigitalOcean sync complete: found %d droplets", len(result.Droplets))
 }
