@@ -32,6 +32,7 @@ type WSCommand struct {
 
 const serversFile = "servers.json"
 var fileMutex sync.Mutex
+var serversCache []byte
 
 func connectSSH(host, user, pass string) (*ssh.Client, error) {
 	config := &ssh.ClientConfig{
@@ -189,6 +190,12 @@ func HandleServers(w http.ResponseWriter, r *http.Request) {
 	defer fileMutex.Unlock()
 
 	if r.Method == "GET" {
+		if serversCache != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(serversCache)
+			return
+		}
+
 		data, err := os.ReadFile(serversFile)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -198,6 +205,8 @@ func HandleServers(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Error reading file", http.StatusInternalServerError)
 			return
 		}
+		
+		serversCache = data
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(data)
 		return
@@ -215,6 +224,8 @@ func HandleServers(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Error writing file", http.StatusInternalServerError)
 			return
 		}
+		
+		serversCache = body
 		w.WriteHeader(http.StatusOK)
 		return
 	}

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"admin-aws/internal/config"
@@ -15,7 +16,26 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 )
 
+var (
+	kamateraCache     []byte
+	kamateraCacheTime time.Time
+	kamateraMutex     sync.Mutex
+
+	awsCache     []map[string]interface{}
+	awsCacheTime time.Time
+	awsMutex     sync.Mutex
+)
+
 func GetKamateraInstances(w http.ResponseWriter, r *http.Request) {
+	kamateraMutex.Lock()
+	if time.Since(kamateraCacheTime) < 30*time.Second && kamateraCache != nil {
+		kamateraMutex.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(kamateraCache)
+		return
+	}
+	kamateraMutex.Unlock()
+
 	clientID := config.GetEnv("KAMATERA_CLIENT_ID", "")
 	secretKey := config.GetEnv("KAMATERA_SECRET_KEY", "")
 
@@ -47,6 +67,11 @@ func GetKamateraInstances(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error reading response", http.StatusInternalServerError)
 		return
 	}
+
+	kamateraMutex.Lock()
+	kamateraCache = body
+	kamateraCacheTime = time.Now()
+	kamateraMutex.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(body)
@@ -171,19 +196,36 @@ func GetInstances(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	awsMutex.Lock()
+	if time.Since(awsCacheTime) < 30*time.Second && awsCache != nil {
+		instances = append(instances, awsCache...)
+		awsMutex.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(instances)
+		return
+	}
+	awsMutex.Unlock()
+
+	var newAwsCache []map[string]interface{}
 	if config.EC2Client != nil {
 		resp, err := config.EC2Client.DescribeInstances(context.TODO(), &ec2.DescribeInstancesInput{})
 		if err == nil {
 			for _, res := range resp.Reservations {
 				for _, inst := range res.Instances {
-					instances = append(instances, map[string]interface{}{
+					instanceData := map[string]interface{}{
 						"InstanceId": *inst.InstanceId,
 						"Provider":   "AWS",
 						"Platform":   "Linux/Windows",
 						"State":      inst.State.Name,
-					})
+					}
+					instances = append(instances, instanceData)
+					newAwsCache = append(newAwsCache, instanceData)
 				}
 			}
+			awsMutex.Lock()
+			awsCache = newAwsCache
+			awsCacheTime = time.Now()
+			awsMutex.Unlock()
 		}
 	}
 
