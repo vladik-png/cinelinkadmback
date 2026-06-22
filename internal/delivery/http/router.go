@@ -10,17 +10,17 @@ import (
 func SetupRouter() *http.ServeMux {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/", Protected(GetInstances))
-	mux.HandleFunc("/logs", Protected(GetLogs))
-	mux.HandleFunc("/alerts", Protected(GetAlerts))
-	mux.HandleFunc("/system-metrics", Protected(GetMetricsForFront))
+	mux.HandleFunc("/", WithCache(10, Protected(GetInstances)))
+	mux.HandleFunc("/logs", Protected(GetLogs)) 
+	mux.HandleFunc("/alerts", WithCache(5, Protected(GetAlerts)))
+	mux.HandleFunc("/system-metrics", WithCache(5, Protected(GetMetricsForFront)))
 	
 	mux.HandleFunc("/report-metrics", EnableCORS(ReceiveMetricsFromAgent))
 	mux.HandleFunc("/log-event", EnableCORS(HandleLogEvent))
 	
 	mux.HandleFunc("/start", Protected(StartInstance))
 	mux.HandleFunc("/stop", Protected(StopInstance))
-	mux.HandleFunc("/kamatera-instances", Protected(GetKamateraInstances))
+	mux.HandleFunc("/kamatera-instances", WithCache(10, Protected(GetKamateraInstances)))
 	
 	mux.HandleFunc("/kill-process", Protected(HandleKillProcess))
 	
