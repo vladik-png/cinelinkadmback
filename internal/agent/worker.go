@@ -8,12 +8,14 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v3/process"
 )
 
 var (
@@ -120,6 +122,58 @@ func collectAndSendMetrics() {
 		cpuVal = cpuP[0]
 	}
 
+	procs, err := process.Processes()
+	var processList []map[string]interface{}
+	if err == nil {
+		type procInfo struct {
+			pid  int32
+			name string
+			cpu  float64
+			ram  float64
+		}
+		var pList []procInfo
+
+		for _, p := range procs {
+			name, err := p.Name()
+			if err != nil || name == "" {
+				continue
+			}
+			cpuPct, err := p.CPUPercent()
+			if err != nil {
+				continue
+			}
+			memInfo, err := p.MemoryInfo()
+			if err != nil {
+				continue
+			}
+
+			pList = append(pList, procInfo{
+				pid:  p.Pid,
+				name: name,
+				cpu:  cpuPct,
+				ram:  float64(memInfo.RSS) / (1024 * 1024),
+			})
+		}
+
+		sort.Slice(pList, func(i, j int) bool {
+			return pList[i].cpu > pList[j].cpu
+		})
+
+		limit := 5
+		if len(pList) < 5 {
+			limit = len(pList)
+		}
+
+		for i := 0; i < limit; i++ {
+			processList = append(processList, map[string]interface{}{
+				"pid":  pList[i].pid,
+				"name": pList[i].name,
+				"cpu":  MathRound(pList[i].cpu),
+				"ram":  MathRound(pList[i].ram),
+			})
+		}
+	}
+
 	metrics := map[string]interface{}{
 		"instance_id": InstanceID,
 		"device_name": DeviceName,
@@ -133,6 +187,7 @@ func collectAndSendMetrics() {
 		"disk":        fmt.Sprintf("%.2f", d.UsedPercent),
 		"ping":        latency,
 		"packet_loss": packetLoss,
+		"processes":   processList,
 	}
 
 	jsonData, err := json.Marshal(metrics)

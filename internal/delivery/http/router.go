@@ -21,6 +21,8 @@ func SetupRouter() *http.ServeMux {
 	mux.HandleFunc("/stop", EnableCORS(StopInstance))
 	mux.HandleFunc("/kamatera-instances", EnableCORS(GetKamateraInstances))
 	
+	mux.HandleFunc("/kill-process", EnableCORS(HandleKillProcess))
+	
 	mux.HandleFunc("/shutdown", EnableCORS(HandleShutdown))
 
 	mux.HandleFunc("/ssh", HandleTerminal) 
