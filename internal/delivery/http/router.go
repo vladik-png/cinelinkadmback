@@ -10,26 +10,27 @@ import (
 func SetupRouter() *http.ServeMux {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/", EnableCORS(GetInstances))
-	mux.HandleFunc("/logs", EnableCORS(GetLogs))
-	mux.HandleFunc("/alerts", EnableCORS(GetAlerts))
-	mux.HandleFunc("/system-metrics", EnableCORS(GetMetricsForFront))
+	mux.HandleFunc("/", Protected(GetInstances))
+	mux.HandleFunc("/logs", Protected(GetLogs))
+	mux.HandleFunc("/alerts", Protected(GetAlerts))
+	mux.HandleFunc("/system-metrics", Protected(GetMetricsForFront))
+	
 	mux.HandleFunc("/report-metrics", EnableCORS(ReceiveMetricsFromAgent))
 	mux.HandleFunc("/log-event", EnableCORS(HandleLogEvent))
 	
-	mux.HandleFunc("/start", EnableCORS(StartInstance))
-	mux.HandleFunc("/stop", EnableCORS(StopInstance))
-	mux.HandleFunc("/kamatera-instances", EnableCORS(GetKamateraInstances))
+	mux.HandleFunc("/start", Protected(StartInstance))
+	mux.HandleFunc("/stop", Protected(StopInstance))
+	mux.HandleFunc("/kamatera-instances", Protected(GetKamateraInstances))
 	
-	mux.HandleFunc("/kill-process", EnableCORS(HandleKillProcess))
+	mux.HandleFunc("/kill-process", Protected(HandleKillProcess))
 	
-	mux.HandleFunc("/shutdown", EnableCORS(HandleShutdown))
+	mux.HandleFunc("/shutdown", Protected(HandleShutdown))
 
-	mux.HandleFunc("/ssh", HandleTerminal) 
-	mux.HandleFunc("/rdp-ws", HandleRDPWebSocket)
-	mux.HandleFunc("/ws/live", HandleLiveWebSocket)
-	mux.HandleFunc("/upload", HandleUpload)
-	mux.HandleFunc("/servers", HandleServers)
+	mux.HandleFunc("/ssh", Protected(HandleTerminal)) 
+	mux.HandleFunc("/rdp-ws", Protected(HandleRDPWebSocket))
+	mux.HandleFunc("/ws/live", Protected(HandleLiveWebSocket))
+	mux.HandleFunc("/upload", Protected(HandleUpload))
+	mux.HandleFunc("/servers", Protected(HandleServers))
 
 	return mux
 }
