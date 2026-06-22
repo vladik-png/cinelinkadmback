@@ -25,6 +25,7 @@ func SetupRouter() *http.ServeMux {
 
 	mux.HandleFunc("/ssh", HandleTerminal) 
 	mux.HandleFunc("/rdp-ws", HandleRDPWebSocket)
+	mux.HandleFunc("/ws/live", HandleLiveWebSocket)
 	mux.HandleFunc("/upload", HandleUpload)
 	mux.HandleFunc("/servers", HandleServers)
 

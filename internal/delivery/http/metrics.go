@@ -26,7 +26,14 @@ func ReceiveMetricsFromAgent(w http.ResponseWriter, r *http.Request) {
 		LastSeen: time.Now(),
 		Metrics:  data,
 	}
+
+	frontData := make(map[string]interface{})
+	for k, s := range state.LatestMetrics {
+		frontData[k] = s.Metrics
+	}
 	state.MetricsMu.Unlock()
+
+	LiveHub.Broadcast("metrics", frontData)
 
 	if database.DB != nil {
 		database.DB.Model(&models.ServerAlert{}).Where("server_id = ? AND type = ? AND resolved = ?", id, "OFFLINE", false).Update("resolved", true)
