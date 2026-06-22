@@ -1,6 +1,4 @@
-//go:build linux || darwin
-
-package main
+package agent
 
 import (
 	"strings"

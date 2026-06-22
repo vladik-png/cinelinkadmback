@@ -1,4 +1,4 @@
-package main
+package agent
 
 import (
 	"bytes"
@@ -7,12 +7,10 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"runtime"
 	"strings"
 	"time"
 
-	"github.com/joho/godotenv"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
@@ -24,7 +22,6 @@ var (
 	PublicIP       string
 	MasterURL      string
 	InstanceID     string
-	AgentPort      string
 )
 
 func getEnv(key, fallback string) string {
@@ -91,18 +88,6 @@ func MathRound(val float64) float64 {
 	return float64(int(val*100)) / 100
 }
 
-func shutdownHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println("Received shutdown command!")
-	sendLog("SHUTDOWN", "INFO", "Shutdown command received from Master")
-	w.WriteHeader(http.StatusOK)
-
-	if runtime.GOOS == "windows" {
-		exec.Command("cmd", "/c", "shutdown", "/s", "/t", "0").Run()
-	} else {
-		exec.Command("sudo", "shutdown", "-h", "now").Run()
-	}
-}
-
 func collectAndSendMetrics() {
 	cpuP, err := cpu.Percent(time.Second, false)
 	if err != nil {
@@ -161,13 +146,11 @@ func collectAndSendMetrics() {
 	}
 }
 
-func main() {
-	log.Println("Initializing agent...")
-	godotenv.Load()
+func Start() {
+	log.Println("Initializing internal agent worker...")
 
 	MasterURL = getEnv("MASTER_URL", "http://127.0.0.1:8081/report-metrics")
 	InstanceID = getEnv("INSTANCE_ID", "")
-	AgentPort = getEnv("AGENT_PORT", "8082")
 
 	initStaticInfo()
 
@@ -175,19 +158,14 @@ func main() {
 		InstanceID = DeviceName
 	}
 	
-	sendLog("BOOT_COMPLETE", "SUCCESS", fmt.Sprintf("Agent started on %s (%s)", DeviceName, runtime.GOOS))
+	sendLog("BOOT_COMPLETE", "SUCCESS", fmt.Sprintf("Agent worker started on %s (%s)", DeviceName, runtime.GOOS))
 
-	log.Printf("Agent ID: %s. Sending to: %s", InstanceID, MasterURL)
-
-	http.HandleFunc("/shutdown", shutdownHandler)
+	log.Printf("Agent ID: %s. Sending metrics internally to: %s", InstanceID, MasterURL)
 
 	go func() {
-		log.Printf("Agent listening for commands on port :%s", AgentPort)
-		log.Fatal(http.ListenAndServe(":"+AgentPort, nil))
+		for {
+			collectAndSendMetrics()
+			time.Sleep(2 * time.Second)
+		}
 	}()
-
-	for {
-		collectAndSendMetrics()
-		time.Sleep(2 * time.Second)
-	}
 }

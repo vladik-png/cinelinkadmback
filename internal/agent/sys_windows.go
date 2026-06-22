@@ -1,6 +1,4 @@
-//go:build windows
-
-package main
+package agent
 
 import (
 	"github.com/yusufpapurcu/wmi"
