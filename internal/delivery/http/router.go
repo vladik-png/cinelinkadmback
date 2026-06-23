@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os/exec"
 	"runtime"
+	"strings"
 )
 
 func SetupRouter() *http.ServeMux {
@@ -31,6 +32,18 @@ func SetupRouter() *http.ServeMux {
 	mux.HandleFunc("/ws/live", Protected(HandleLiveWebSocket))
 	mux.HandleFunc("/upload", Protected(HandleUpload))
 	mux.HandleFunc("/servers", Protected(HandleServers))
+	
+	mux.HandleFunc("/employee/chat", Protected(HandleGetUserChats))
+	mux.HandleFunc("/chats/get-or-create/", Protected(HandleGetOrCreateChat))
+	mux.HandleFunc("/chats/", Protected(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/members") {
+			HandleChatMembers(w, r)
+		} else if strings.Contains(r.URL.Path, "/messages") {
+			HandleChatMessages(w, r)
+		} else {
+			HandleGetChatDetails(w, r)
+		}
+	}))
 
 	return mux
 }

@@ -24,7 +24,13 @@ func InitDB() {
 		log.Fatal("Failed to connect to database:", err)
 	}
 
-	DB.AutoMigrate(&models.ServerLog{}, &models.ServerAlert{})
+	DB.AutoMigrate(
+		&models.ServerLog{}, 
+		&models.ServerAlert{},
+		&models.CorporateChat{},
+		&models.CorporateChatMember{},
+		&models.CorporateChatMessage{},
+	)
 	log.Println("Database initialized successfully")
 }
 
