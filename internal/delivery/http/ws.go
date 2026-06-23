@@ -16,7 +16,7 @@ import (
 )
 
 type WSHub struct {
-	clients map[*websocket.Conn]uint // Maps conn -> EmployeeID
+	clients map[*websocket.Conn]uint
 	mu      sync.RWMutex
 }
 
@@ -26,7 +26,7 @@ var LiveHub = &WSHub{
 
 func (h *WSHub) register(conn *websocket.Conn) {
 	h.mu.Lock()
-	h.clients[conn] = 0 // 0 means unauthenticated
+	h.clients[conn] = 0
 	h.mu.Unlock()
 	log.Println("New Live WebSocket client connected")
 }
@@ -42,15 +42,13 @@ func (h *WSHub) unregister(conn *websocket.Conn) {
 	h.mu.Unlock()
 
 	if employeeID != 0 {
-		// Update status to offline
 		status := models.EmployeeStatus{
 			EmployeeID: employeeID,
 			IsOnline:   false,
-			LastSeen:   time.Now(),
+			LastSeen:   time.Now().UTC(),
 		}
 		database.DB.Clauses(clause.OnConflict{UpdateAll: true}).Create(&status)
 
-		// Broadcast offline status globally
 		h.Broadcast("user_status", map[string]interface{}{
 			"employee_id": employeeID,
 			"is_online":   false,
@@ -133,15 +131,13 @@ func HandleLiveWebSocket(w http.ResponseWriter, r *http.Request) {
 				LiveHub.clients[ws] = employeeID
 				LiveHub.mu.Unlock()
 
-				// Update DB status to online
 				status := models.EmployeeStatus{
 					EmployeeID: employeeID,
 					IsOnline:   true,
-					LastSeen:   time.Now(),
+					LastSeen:   time.Now().UTC(),
 				}
 				database.DB.Clauses(clause.OnConflict{UpdateAll: true}).Create(&status)
 
-				// Broadcast online status globally
 				LiveHub.Broadcast("user_status", map[string]interface{}{
 					"employee_id": employeeID,
 					"is_online":   true,
@@ -181,7 +177,6 @@ func HandleLiveWebSocket(w http.ResponseWriter, r *http.Request) {
 				chatID := uint(chatIDFloat)
 				msgID := uint(msgIDFloat)
 				
-				// Update LastSeenMessageID in DB
 				database.DB.Model(&models.CorporateChatMember{}).
 					Where("chat_id = ? AND employee_id = ?", chatID, senderID).
 					Update("last_seen_message_id", msgID)

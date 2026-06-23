@@ -4,6 +4,7 @@ import (
 	"admin-aws/internal/database"
 	"admin-aws/internal/models"
 	"errors"
+	"time"
 )
 
 type ChatDTO struct {
@@ -51,7 +52,6 @@ func GetUserChats(employeeID uint) ([]ChatDTO, error) {
 
 	var result []ChatDTO
 	for _, c := range chats {
-		// fetch last message
 		var lastMsg models.CorporateChatMessage
 		database.DB.Where("chat_id = ?", c.ID).Order("created_at desc").First(&lastMsg)
 
@@ -71,7 +71,7 @@ func GetUserChats(employeeID uint) ([]ChatDTO, error) {
 				MessageType: string(lastMsg.MessageType),
 				Message:     lastMsg.MessageContent,
 				Timestamp:   lastMsg.AddedAt.Format("2006-01-02T15:04:05Z07:00"),
-				Status:      "sent", // Simple default for last message list
+				Status:      "sent",
 			}
 		}
 
@@ -151,7 +151,7 @@ func GetChatMembers(chatID uint) ([]ChatMemberDTO, error) {
 		result = append(result, ChatMemberDTO{
 			EmployeeID: m.EmployeeID,
 			Role:       m.Role,
-			FullName:   "Employee " + string(rune(m.EmployeeID)), // Placeholder for profile join
+			FullName:   "Employee " + string(rune(m.EmployeeID)),
 		})
 	}
 	return result, nil
@@ -236,6 +236,7 @@ func SendMessage(chatID, employeeID uint, content, msgType string) (ChatMessageD
 		EmployeeID:     employeeID,
 		MessageType:    models.MessageType(msgType),
 		MessageContent: content,
+		AddedAt:        time.Now().UTC(),
 	}
 	if err := database.DB.Create(&msg).Error; err != nil {
 		return ChatMessageDTO{}, err
@@ -248,7 +249,7 @@ func SendMessage(chatID, employeeID uint, content, msgType string) (ChatMessageD
 		MessageType: string(msg.MessageType),
 		Message:     msg.MessageContent,
 		Timestamp:   msg.AddedAt.Format("2006-01-02T15:04:05Z07:00"),
-		Status:      "sent", // Newly sent message starts as sent
+		Status:      "sent",
 	}, nil
 }
 

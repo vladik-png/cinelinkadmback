@@ -208,6 +208,16 @@ func HandleChatMessages(w http.ResponseWriter, r *http.Request) {
 			sendJSONError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
+		members, err := services.GetChatMembers(uint(chatID))
+		if err == nil {
+			for _, m := range members {
+				if m.EmployeeID != body.Content.UserID {
+					LiveHub.SendToEmployee(m.EmployeeID, "new_message", msg)
+				}
+			}
+		}
+
 		sendJSONResponse(w, msg)
 	}
 }
