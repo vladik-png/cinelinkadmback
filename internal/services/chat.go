@@ -30,6 +30,7 @@ type ChatMessageDTO struct {
 	MessageType string `json:"message_type"`
 	Message     string `json:"message"`
 	Timestamp   string `json:"timestamp"`
+	Status      string `json:"status"`
 }
 
 func GetUserChats(employeeID uint) ([]ChatDTO, error) {
@@ -70,6 +71,7 @@ func GetUserChats(employeeID uint) ([]ChatDTO, error) {
 				MessageType: string(lastMsg.MessageType),
 				Message:     lastMsg.MessageContent,
 				Timestamp:   lastMsg.AddedAt.Format("2006-01-02T15:04:05Z07:00"),
+				Status:      "sent", // Simple default for last message list
 			}
 		}
 
@@ -179,8 +181,42 @@ func GetChatMessages(chatID uint) ([]ChatMessageDTO, error) {
 		return nil, err
 	}
 
+	var members []models.CorporateChatMember
+	database.DB.Where("chat_id = ?", chatID).Find(&members)
+
+	memberOnline := make(map[uint]bool)
+	memberLastSeenMsg := make(map[uint]uint)
+
+	for _, m := range members {
+		memberLastSeenMsg[m.EmployeeID] = m.LastSeenMessageID
+		var empStatus models.EmployeeStatus
+		database.DB.First(&empStatus, m.EmployeeID)
+		memberOnline[m.EmployeeID] = empStatus.IsOnline
+	}
+
 	var result []ChatMessageDTO
 	for _, msg := range messages {
+		status := "sent"
+		maxLastSeen := uint(0)
+		anyOnline := false
+
+		for _, m := range members {
+			if m.EmployeeID != msg.EmployeeID {
+				if memberLastSeenMsg[m.EmployeeID] > maxLastSeen {
+					maxLastSeen = memberLastSeenMsg[m.EmployeeID]
+				}
+				if memberOnline[m.EmployeeID] {
+					anyOnline = true
+				}
+			}
+		}
+
+		if msg.ID <= maxLastSeen {
+			status = "seen"
+		} else if anyOnline {
+			status = "delivered"
+		}
+
 		result = append(result, ChatMessageDTO{
 			MessageID:   msg.ID,
 			ChatID:      msg.ChatID,
@@ -188,6 +224,7 @@ func GetChatMessages(chatID uint) ([]ChatMessageDTO, error) {
 			MessageType: string(msg.MessageType),
 			Message:     msg.MessageContent,
 			Timestamp:   msg.AddedAt.Format("2006-01-02T15:04:05Z07:00"),
+			Status:      status,
 		})
 	}
 	return result, nil
@@ -211,6 +248,7 @@ func SendMessage(chatID, employeeID uint, content, msgType string) (ChatMessageD
 		MessageType: string(msg.MessageType),
 		Message:     msg.MessageContent,
 		Timestamp:   msg.AddedAt.Format("2006-01-02T15:04:05Z07:00"),
+		Status:      "sent", // Newly sent message starts as sent
 	}, nil
 }
 

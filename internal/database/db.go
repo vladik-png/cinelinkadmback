@@ -30,6 +30,7 @@ func InitDB() {
 		&models.CorporateChat{},
 		&models.CorporateChatMember{},
 		&models.CorporateChatMessage{},
+		&models.EmployeeStatus{},
 	)
 	log.Println("Database initialized successfully")
 }

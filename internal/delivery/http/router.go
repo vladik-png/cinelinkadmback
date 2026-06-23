@@ -44,6 +44,7 @@ func SetupRouter() *http.ServeMux {
 			HandleGetChatDetails(w, r)
 		}
 	}))
+	mux.HandleFunc("/employee-status/", Protected(HandleEmployeeStatus))
 
 	return mux
 }

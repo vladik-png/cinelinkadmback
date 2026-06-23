@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"admin-aws/internal/config"
+	"admin-aws/internal/database"
+	"admin-aws/internal/models"
 	"admin-aws/internal/services"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -21,6 +23,17 @@ func getUserIDFromRequest(r *http.Request) uint {
 		tokenString = r.URL.Query().Get("token")
 	}
 	
+	if empIdStr := r.Header.Get("X-Employee-ID"); empIdStr != "" {
+		if id, err := strconv.ParseUint(empIdStr, 10, 32); err == nil {
+			return uint(id)
+		}
+	}
+	if empIdStr := r.URL.Query().Get("employee_id"); empIdStr != "" {
+		if id, err := strconv.ParseUint(empIdStr, 10, 32); err == nil {
+			return uint(id)
+		}
+	}
+
 	if tokenString != "" && secret != "" {
 		token, _ := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			return []byte(secret), nil
@@ -197,4 +210,30 @@ func HandleChatMessages(w http.ResponseWriter, r *http.Request) {
 		}
 		sendJSONResponse(w, msg)
 	}
+}
+
+func HandleEmployeeStatus(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 3 {
+		sendJSONError(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+	employeeID, err := strconv.ParseUint(parts[2], 10, 32)
+	if err != nil {
+		sendJSONError(w, "invalid employee id", http.StatusBadRequest)
+		return
+	}
+
+	var status models.EmployeeStatus
+	if err := database.DB.First(&status, uint(employeeID)).Error; err != nil {
+		sendJSONResponse(w, map[string]interface{}{
+			"is_online": false,
+		})
+		return
+	}
+
+	sendJSONResponse(w, map[string]interface{}{
+		"is_online": status.IsOnline,
+		"last_seen": status.LastSeen.Format("2006-01-02T15:04:05Z07:00"),
+	})
 }
