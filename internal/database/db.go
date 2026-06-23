@@ -10,29 +10,45 @@ import (
 )
 
 var DB *gorm.DB
+var ChatDB *gorm.DB
 
 func InitDB() {
 	dsn := config.GetEnv("DATABASE_URL", "")
+	chatDsn := config.GetEnv("CHAT_DATABASE_URL", "")
+
 	if dsn == "" {
 		log.Println("DATABASE_URL not found, DB disabled")
-		return
+	} else {
+		var err error
+		DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+		if err != nil {
+			log.Fatal("Failed to connect to database:", err)
+		}
+
+		DB.AutoMigrate(
+			&models.ServerLog{}, 
+			&models.ServerAlert{},
+		)
+		log.Println("Database initialized successfully")
 	}
 
-	var err error
-	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
-	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
-	}
+	if chatDsn == "" {
+		log.Println("CHAT_DATABASE_URL not found, Chat DB disabled")
+	} else {
+		var err error
+		ChatDB, err = gorm.Open(postgres.Open(chatDsn), &gorm.Config{})
+		if err != nil {
+			log.Fatal("Failed to connect to chat database:", err)
+		}
 
-	DB.AutoMigrate(
-		&models.ServerLog{}, 
-		&models.ServerAlert{},
-		&models.CorporateChat{},
-		&models.CorporateChatMember{},
-		&models.CorporateChatMessage{},
-		&models.EmployeeStatus{},
-	)
-	log.Println("Database initialized successfully")
+		ChatDB.AutoMigrate(
+			&models.CorporateChat{},
+			&models.CorporateChatMember{},
+			&models.CorporateChatMessage{},
+			&models.EmployeeStatus{},
+		)
+		log.Println("Chat database initialized successfully")
+	}
 }
 
 func LogEvent(serverID, action, status, details string) {

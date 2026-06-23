@@ -36,7 +36,7 @@ type ChatMessageDTO struct {
 
 func GetUserChats(employeeID uint) ([]ChatDTO, error) {
 	var members []models.CorporateChatMember
-	if err := database.DB.Where("employee_id = ?", employeeID).Find(&members).Error; err != nil {
+	if err := database.ChatDB.Where("employee_id = ?", employeeID).Find(&members).Error; err != nil {
 		return nil, err
 	}
 
@@ -47,16 +47,16 @@ func GetUserChats(employeeID uint) ([]ChatDTO, error) {
 
 	var chats []models.CorporateChat
 	if len(chatIDs) > 0 {
-		database.DB.Where("id IN ?", chatIDs).Find(&chats)
+		database.ChatDB.Where("id IN ?", chatIDs).Find(&chats)
 	}
 
 	var result []ChatDTO
 	for _, c := range chats {
 		var lastMsg models.CorporateChatMessage
-		database.DB.Where("chat_id = ?", c.ID).Order("created_at desc").First(&lastMsg)
+		database.ChatDB.Where("chat_id = ?", c.ID).Order("created_at desc").First(&lastMsg)
 
 		var participants []models.CorporateChatMember
-		database.DB.Where("chat_id = ?", c.ID).Find(&participants)
+		database.ChatDB.Where("chat_id = ?", c.ID).Find(&participants)
 		var pIds []uint
 		for _, p := range participants {
 			pIds = append(pIds, p.EmployeeID)
@@ -90,11 +90,11 @@ func GetUserChats(employeeID uint) ([]ChatDTO, error) {
 
 func GetChatDetails(chatID uint) (*ChatDTO, error) {
 	var c models.CorporateChat
-	if err := database.DB.First(&c, chatID).Error; err != nil {
+	if err := database.ChatDB.First(&c, chatID).Error; err != nil {
 		return nil, err
 	}
 	var participants []models.CorporateChatMember
-	database.DB.Where("chat_id = ?", c.ID).Find(&participants)
+	database.ChatDB.Where("chat_id = ?", c.ID).Find(&participants)
 	var pIds []uint
 	for _, p := range participants {
 		pIds = append(pIds, p.EmployeeID)
@@ -119,7 +119,7 @@ func GetOrCreateChat(employeeID, friendID uint) (uint, error) {
 		WHERE c.chat_type = 'direct' AND cm1.employee_id = ? AND cm2.employee_id = ?
 		LIMIT 1
 	`
-	err := database.DB.Raw(query, employeeID, friendID).Scan(&existingChatID).Error
+	err := database.ChatDB.Raw(query, employeeID, friendID).Scan(&existingChatID).Error
 	if err == nil && existingChatID != 0 {
 		return existingChatID, nil
 	}
@@ -128,13 +128,13 @@ func GetOrCreateChat(employeeID, friendID uint) (uint, error) {
 		ChatType:  models.ChatTypeDirect,
 		CreatorID: employeeID,
 	}
-	if err := database.DB.Create(&newChat).Error; err != nil {
+	if err := database.ChatDB.Create(&newChat).Error; err != nil {
 		return 0, err
 	}
 
-	database.DB.Create(&models.CorporateChatMember{ChatID: newChat.ID, EmployeeID: employeeID, Role: "admin"})
+	database.ChatDB.Create(&models.CorporateChatMember{ChatID: newChat.ID, EmployeeID: employeeID, Role: "admin"})
 	if employeeID != friendID {
-		database.DB.Create(&models.CorporateChatMember{ChatID: newChat.ID, EmployeeID: friendID, Role: "user"})
+		database.ChatDB.Create(&models.CorporateChatMember{ChatID: newChat.ID, EmployeeID: friendID, Role: "user"})
 	}
 
 	return newChat.ID, nil
@@ -142,7 +142,7 @@ func GetOrCreateChat(employeeID, friendID uint) (uint, error) {
 
 func GetChatMembers(chatID uint) ([]ChatMemberDTO, error) {
 	var members []models.CorporateChatMember
-	if err := database.DB.Where("chat_id = ?", chatID).Find(&members).Error; err != nil {
+	if err := database.ChatDB.Where("chat_id = ?", chatID).Find(&members).Error; err != nil {
 		return nil, err
 	}
 
@@ -159,7 +159,7 @@ func GetChatMembers(chatID uint) ([]ChatMemberDTO, error) {
 
 func AddChatMember(chatID, employeeID uint) error {
 	var count int64
-	database.DB.Model(&models.CorporateChatMember{}).Where("chat_id = ? AND employee_id = ?", chatID, employeeID).Count(&count)
+	database.ChatDB.Model(&models.CorporateChatMember{}).Where("chat_id = ? AND employee_id = ?", chatID, employeeID).Count(&count)
 	if count > 0 {
 		return errors.New("already a member")
 	}
@@ -168,21 +168,21 @@ func AddChatMember(chatID, employeeID uint) error {
 		EmployeeID: employeeID,
 		Role:       "user",
 	}
-	return database.DB.Create(&member).Error
+	return database.ChatDB.Create(&member).Error
 }
 
 func RemoveChatMember(chatID, employeeID uint) error {
-	return database.DB.Where("chat_id = ? AND employee_id = ?", chatID, employeeID).Delete(&models.CorporateChatMember{}).Error
+	return database.ChatDB.Where("chat_id = ? AND employee_id = ?", chatID, employeeID).Delete(&models.CorporateChatMember{}).Error
 }
 
 func GetChatMessages(chatID uint) ([]ChatMessageDTO, error) {
 	var messages []models.CorporateChatMessage
-	if err := database.DB.Where("chat_id = ?", chatID).Order("created_at asc").Find(&messages).Error; err != nil {
+	if err := database.ChatDB.Where("chat_id = ?", chatID).Order("created_at asc").Find(&messages).Error; err != nil {
 		return nil, err
 	}
 
 	var members []models.CorporateChatMember
-	database.DB.Where("chat_id = ?", chatID).Find(&members)
+	database.ChatDB.Where("chat_id = ?", chatID).Find(&members)
 
 	memberOnline := make(map[uint]bool)
 	memberLastSeenMsg := make(map[uint]uint)
@@ -190,7 +190,7 @@ func GetChatMessages(chatID uint) ([]ChatMessageDTO, error) {
 	for _, m := range members {
 		memberLastSeenMsg[m.EmployeeID] = m.LastSeenMessageID
 		var empStatus models.EmployeeStatus
-		database.DB.First(&empStatus, m.EmployeeID)
+		database.ChatDB.First(&empStatus, m.EmployeeID)
 		memberOnline[m.EmployeeID] = empStatus.IsOnline
 	}
 
@@ -238,7 +238,7 @@ func SendMessage(chatID, employeeID uint, content, msgType string) (ChatMessageD
 		MessageContent: content,
 		AddedAt:        time.Now().UTC(),
 	}
-	if err := database.DB.Create(&msg).Error; err != nil {
+	if err := database.ChatDB.Create(&msg).Error; err != nil {
 		return ChatMessageDTO{}, err
 	}
 
@@ -254,13 +254,13 @@ func SendMessage(chatID, employeeID uint, content, msgType string) (ChatMessageD
 }
 
 func DeleteChat(chatID uint) error {
-	if err := database.DB.Where("chat_id = ?", chatID).Delete(&models.CorporateChatMember{}).Error; err != nil {
+	if err := database.ChatDB.Where("chat_id = ?", chatID).Delete(&models.CorporateChatMember{}).Error; err != nil {
 		return err
 	}
-	if err := database.DB.Where("chat_id = ?", chatID).Delete(&models.CorporateChatMessage{}).Error; err != nil {
+	if err := database.ChatDB.Where("chat_id = ?", chatID).Delete(&models.CorporateChatMessage{}).Error; err != nil {
 		return err
 	}
-	if err := database.DB.Where("id = ?", chatID).Delete(&models.CorporateChat{}).Error; err != nil {
+	if err := database.ChatDB.Where("id = ?", chatID).Delete(&models.CorporateChat{}).Error; err != nil {
 		return err
 	}
 	return nil

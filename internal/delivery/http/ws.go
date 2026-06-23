@@ -47,7 +47,7 @@ func (h *WSHub) unregister(conn *websocket.Conn) {
 			IsOnline:   false,
 			LastSeen:   time.Now().UTC(),
 		}
-		database.DB.Clauses(clause.OnConflict{UpdateAll: true}).Create(&status)
+		database.ChatDB.Clauses(clause.OnConflict{UpdateAll: true}).Create(&status)
 
 		h.Broadcast("user_status", map[string]interface{}{
 			"employee_id": employeeID,
@@ -136,7 +136,7 @@ func HandleLiveWebSocket(w http.ResponseWriter, r *http.Request) {
 					IsOnline:   true,
 					LastSeen:   time.Now().UTC(),
 				}
-				database.DB.Clauses(clause.OnConflict{UpdateAll: true}).Create(&status)
+				database.ChatDB.Clauses(clause.OnConflict{UpdateAll: true}).Create(&status)
 
 				LiveHub.Broadcast("user_status", map[string]interface{}{
 					"employee_id": employeeID,
@@ -177,7 +177,7 @@ func HandleLiveWebSocket(w http.ResponseWriter, r *http.Request) {
 				chatID := uint(chatIDFloat)
 				msgID := uint(msgIDFloat)
 				
-				database.DB.Model(&models.CorporateChatMember{}).
+				database.ChatDB.Model(&models.CorporateChatMember{}).
 					Where("chat_id = ? AND employee_id = ?", chatID, senderID).
 					Update("last_seen_message_id", msgID)
 

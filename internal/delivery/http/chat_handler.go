@@ -235,7 +235,7 @@ func HandleEmployeeStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var status models.EmployeeStatus
-	if err := database.DB.First(&status, uint(employeeID)).Error; err != nil {
+	if err := database.ChatDB.First(&status, uint(employeeID)).Error; err != nil {
 		sendJSONResponse(w, map[string]interface{}{
 			"is_online": false,
 		})
